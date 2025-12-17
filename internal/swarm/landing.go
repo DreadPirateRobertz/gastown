@@ -196,31 +196,31 @@ func (m *Manager) gitRunOutput(dir string, args ...string) (string, error) {
 
 // notifyMayorCodeAtRisk sends an alert to Mayor about code at risk.
 func (m *Manager) notifyMayorCodeAtRisk(townRoot, swarmID string, workers []string) {
-	router := mail.NewRouter(townRoot)
-	msg := mail.NewMessage(
-		fmt.Sprintf("%s/refinery", m.rig.Name),
-		"mayor/",
-		fmt.Sprintf("⚠️ Code at risk in swarm %s", swarmID),
-		fmt.Sprintf(`Landing blocked for swarm %s.
+	router := mail.NewRouter(m.workDir)
+	msg := &mail.Message{
+		From: fmt.Sprintf("%s/refinery", m.rig.Name),
+		To:   "mayor/",
+		Subject: fmt.Sprintf("Code at risk in swarm %s", swarmID),
+		Body: fmt.Sprintf(`Landing blocked for swarm %s.
 
 The following workers have uncommitted or unpushed code:
 %s
 
 Manual intervention required.`,
 			swarmID, strings.Join(workers, "\n- ")),
-	)
-	msg.Priority = mail.PriorityHigh
+		Priority: mail.PriorityHigh,
+	}
 	router.Send(msg)
 }
 
 // notifyMayorLanded sends a landing report to Mayor.
 func (m *Manager) notifyMayorLanded(townRoot string, swarm *Swarm, result *LandingResult) {
-	router := mail.NewRouter(townRoot)
-	msg := mail.NewMessage(
-		fmt.Sprintf("%s/refinery", m.rig.Name),
-		"mayor/",
-		fmt.Sprintf("✓ Swarm %s landed", swarm.ID),
-		fmt.Sprintf(`Swarm landing complete.
+	router := mail.NewRouter(m.workDir)
+	msg := &mail.Message{
+		From: fmt.Sprintf("%s/refinery", m.rig.Name),
+		To:   "mayor/",
+		Subject: fmt.Sprintf("Swarm %s landed", swarm.ID),
+		Body: fmt.Sprintf(`Swarm landing complete.
 
 Swarm: %s
 Target: %s
@@ -232,6 +232,6 @@ Tasks merged: %d`,
 			result.SessionsStopped,
 			result.BranchesCleaned,
 			len(swarm.Tasks)),
-	)
+	}
 	router.Send(msg)
 }

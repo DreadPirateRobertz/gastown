@@ -497,18 +497,12 @@ func formatAge(t time.Time) string {
 
 // notifyWorkerConflict sends a conflict notification to a polecat.
 func (m *Manager) notifyWorkerConflict(mr *MergeRequest) {
-	// Find town root by walking up from rig path
-	townRoot := findTownRoot(m.workDir)
-	if townRoot == "" {
-		return
-	}
-
-	router := mail.NewRouter(townRoot)
-	msg := mail.NewMessage(
-		fmt.Sprintf("%s/refinery", m.rig.Name),
-		fmt.Sprintf("%s/%s", m.rig.Name, mr.Worker),
-		"Merge conflict - rebase required",
-		fmt.Sprintf(`Your branch %s has conflicts with %s.
+	router := mail.NewRouter(m.workDir)
+	msg := &mail.Message{
+		From: fmt.Sprintf("%s/refinery", m.rig.Name),
+		To:   fmt.Sprintf("%s/%s", m.rig.Name, mr.Worker),
+		Subject: "Merge conflict - rebase required",
+		Body: fmt.Sprintf(`Your branch %s has conflicts with %s.
 
 Please rebase your changes:
   git fetch origin
@@ -517,29 +511,24 @@ Please rebase your changes:
 
 Then the Refinery will retry the merge.`,
 			mr.Branch, mr.TargetBranch, mr.TargetBranch),
-	)
-	msg.Priority = mail.PriorityHigh
+		Priority: mail.PriorityHigh,
+	}
 	router.Send(msg)
 }
 
 // notifyWorkerMerged sends a success notification to a polecat.
 func (m *Manager) notifyWorkerMerged(mr *MergeRequest) {
-	townRoot := findTownRoot(m.workDir)
-	if townRoot == "" {
-		return
-	}
-
-	router := mail.NewRouter(townRoot)
-	msg := mail.NewMessage(
-		fmt.Sprintf("%s/refinery", m.rig.Name),
-		fmt.Sprintf("%s/%s", m.rig.Name, mr.Worker),
-		"Work merged successfully",
-		fmt.Sprintf(`Your branch %s has been merged to %s.
+	router := mail.NewRouter(m.workDir)
+	msg := &mail.Message{
+		From: fmt.Sprintf("%s/refinery", m.rig.Name),
+		To:   fmt.Sprintf("%s/%s", m.rig.Name, mr.Worker),
+		Subject: "Work merged successfully",
+		Body: fmt.Sprintf(`Your branch %s has been merged to %s.
 
 Issue: %s
 Thank you for your contribution!`,
 			mr.Branch, mr.TargetBranch, mr.IssueID),
-	)
+	}
 	router.Send(msg)
 }
 

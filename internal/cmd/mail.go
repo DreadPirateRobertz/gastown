@@ -15,12 +15,12 @@ import (
 
 // Mail command flags
 var (
-	mailSubject    string
-	mailBody       string
-	mailPriority   string
-	mailNotify     bool
-	mailInboxJSON  bool
-	mailReadJSON   bool
+	mailSubject     string
+	mailBody        string
+	mailPriority    string
+	mailNotify      bool
+	mailInboxJSON   bool
+	mailReadJSON    bool
 	mailInboxUnread bool
 )
 
@@ -29,7 +29,8 @@ var mailCmd = &cobra.Command{
 	Short: "Agent messaging system",
 	Long: `Send and receive messages between agents.
 
-The mail system allows Mayor, polecats, and the Refinery to communicate.`,
+The mail system allows Mayor, polecats, and the Refinery to communicate.
+Messages are stored in beads as issues with type=message.`,
 }
 
 var mailSendCmd = &cobra.Command{
@@ -76,6 +77,16 @@ The message ID can be found from 'gt mail inbox'.`,
 	RunE: runMailRead,
 }
 
+var mailDeleteCmd = &cobra.Command{
+	Use:   "delete <message-id>",
+	Short: "Delete a message",
+	Long: `Delete (acknowledge) a message.
+
+This closes the message in beads.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runMailDelete,
+}
+
 func init() {
 	// Send flags
 	mailSendCmd.Flags().StringVarP(&mailSubject, "subject", "s", "", "Message subject (required)")
@@ -95,6 +106,7 @@ func init() {
 	mailCmd.AddCommand(mailSendCmd)
 	mailCmd.AddCommand(mailInboxCmd)
 	mailCmd.AddCommand(mailReadCmd)
+	mailCmd.AddCommand(mailDeleteCmd)
 
 	rootCmd.AddCommand(mailCmd)
 }
@@ -102,37 +114,43 @@ func init() {
 func runMailSend(cmd *cobra.Command, args []string) error {
 	to := args[0]
 
-	townRoot, err := workspace.FindFromCwdOrError()
+	// Find workspace - we need a directory with .beads
+	workDir, err := findBeadsWorkDir()
 	if err != nil {
 		return fmt.Errorf("not in a Gas Town workspace: %w", err)
 	}
 
 	// Determine sender
-	from := detectSender(townRoot)
+	from := detectSender()
 
 	// Create message
-	msg := mail.NewMessage(from, to, mailSubject, mailBody)
+	msg := &mail.Message{
+		From:    from,
+		To:      to,
+		Subject: mailSubject,
+		Body:    mailBody,
+	}
 
 	// Set priority
 	if mailPriority == "high" || mailNotify {
 		msg.Priority = mail.PriorityHigh
 	}
 
-	// Send
-	router := mail.NewRouter(townRoot)
+	// Send via router
+	router := mail.NewRouter(workDir)
 	if err := router.Send(msg); err != nil {
 		return fmt.Errorf("sending message: %w", err)
 	}
 
 	fmt.Printf("%s Message sent to %s\n", style.Bold.Render("✓"), to)
-	fmt.Printf("  ID: %s\n", style.Dim.Render(msg.ID))
 	fmt.Printf("  Subject: %s\n", mailSubject)
 
 	return nil
 }
 
 func runMailInbox(cmd *cobra.Command, args []string) error {
-	townRoot, err := workspace.FindFromCwdOrError()
+	// Find workspace
+	workDir, err := findBeadsWorkDir()
 	if err != nil {
 		return fmt.Errorf("not in a Gas Town workspace: %w", err)
 	}
@@ -142,11 +160,11 @@ func runMailInbox(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		address = args[0]
 	} else {
-		address = detectSender(townRoot)
+		address = detectSender()
 	}
 
 	// Get mailbox
-	router := mail.NewRouter(townRoot)
+	router := mail.NewRouter(workDir)
 	mailbox, err := router.GetMailbox(address)
 	if err != nil {
 		return fmt.Errorf("getting mailbox: %w", err)
@@ -204,16 +222,17 @@ func runMailInbox(cmd *cobra.Command, args []string) error {
 func runMailRead(cmd *cobra.Command, args []string) error {
 	msgID := args[0]
 
-	townRoot, err := workspace.FindFromCwdOrError()
+	// Find workspace
+	workDir, err := findBeadsWorkDir()
 	if err != nil {
 		return fmt.Errorf("not in a Gas Town workspace: %w", err)
 	}
 
 	// Determine which inbox
-	address := detectSender(townRoot)
+	address := detectSender()
 
 	// Get mailbox and message
-	router := mail.NewRouter(townRoot)
+	router := mail.NewRouter(workDir)
 	mailbox, err := router.GetMailbox(address)
 	if err != nil {
 		return fmt.Errorf("getting mailbox: %w", err)
@@ -253,8 +272,69 @@ func runMailRead(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runMailDelete(cmd *cobra.Command, args []string) error {
+	msgID := args[0]
+
+	// Find workspace
+	workDir, err := findBeadsWorkDir()
+	if err != nil {
+		return fmt.Errorf("not in a Gas Town workspace: %w", err)
+	}
+
+	// Determine which inbox
+	address := detectSender()
+
+	// Get mailbox
+	router := mail.NewRouter(workDir)
+	mailbox, err := router.GetMailbox(address)
+	if err != nil {
+		return fmt.Errorf("getting mailbox: %w", err)
+	}
+
+	if err := mailbox.Delete(msgID); err != nil {
+		return fmt.Errorf("deleting message: %w", err)
+	}
+
+	fmt.Printf("%s Message deleted\n", style.Bold.Render("✓"))
+	return nil
+}
+
+// findBeadsWorkDir finds a directory with a .beads database.
+// Walks up from CWD looking for .beads/ directory.
+func findBeadsWorkDir() (string, error) {
+	// First try workspace root
+	townRoot, err := workspace.FindFromCwdOrError()
+	if err == nil {
+		// Check if town root has .beads
+		if _, err := os.Stat(filepath.Join(townRoot, ".beads")); err == nil {
+			return townRoot, nil
+		}
+	}
+
+	// Walk up from CWD looking for .beads
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	path := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(path, ".beads")); err == nil {
+			return path, nil
+		}
+
+		parent := filepath.Dir(path)
+		if parent == path {
+			break // Reached root
+		}
+		path = parent
+	}
+
+	return "", fmt.Errorf("no .beads directory found")
+}
+
 // detectSender determines the current context's address.
-func detectSender(townRoot string) string {
+func detectSender() string {
 	// Check environment variables (set by session start)
 	rig := os.Getenv("GT_RIG")
 	polecat := os.Getenv("GT_POLECAT")
