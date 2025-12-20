@@ -554,9 +554,13 @@ func extractPolecatName(body string) string {
 }
 
 // cleanupPolecat performs the full cleanup sequence for an ephemeral polecat.
-// 1. Kill session
-// 2. Remove worktree
-// 3. Delete branch
+// 1. Check for uncommitted work (stubbornly refuses to lose work)
+// 2. Kill session
+// 3. Remove worktree
+// 4. Delete branch
+//
+// If the polecat has uncommitted work (changes, stashes, or unpushed commits),
+// the cleanup is aborted and an error is returned. The Witness will retry later.
 func (m *Manager) cleanupPolecat(polecatName string) error {
 	fmt.Printf("  Cleaning up polecat %s...\n", polecatName)
 
@@ -566,7 +570,31 @@ func (m *Manager) cleanupPolecat(polecatName string) error {
 	polecatGit := git.NewGit(m.rig.Path)
 	polecatMgr := polecat.NewManager(m.rig, polecatGit)
 
-	// 1. Kill session
+	// Get polecat path for git check
+	polecatPath := filepath.Join(m.rig.Path, "polecats", polecatName)
+
+	// 1. Check for uncommitted work BEFORE doing anything destructive
+	pGit := git.NewGit(polecatPath)
+	status, err := pGit.CheckUncommittedWork()
+	if err != nil {
+		// If we can't check (e.g., not a git repo), log warning but continue
+		fmt.Printf("    Warning: could not check uncommitted work: %v\n", err)
+	} else if !status.Clean() {
+		// REFUSE to clean up - this is the key safety feature
+		fmt.Printf("    REFUSING to cleanup - polecat has uncommitted work:\n")
+		if status.HasUncommittedChanges {
+			fmt.Printf("      • %d uncommitted change(s)\n", len(status.ModifiedFiles)+len(status.UntrackedFiles))
+		}
+		if status.StashCount > 0 {
+			fmt.Printf("      • %d stash(es)\n", status.StashCount)
+		}
+		if status.UnpushedCommits > 0 {
+			fmt.Printf("      • %d unpushed commit(s)\n", status.UnpushedCommits)
+		}
+		return fmt.Errorf("polecat %s has uncommitted work: %s", polecatName, status.String())
+	}
+
+	// 2. Kill session
 	running, err := sessMgr.IsRunning(polecatName)
 	if err == nil && running {
 		fmt.Printf("    Killing session...\n")
@@ -575,16 +603,17 @@ func (m *Manager) cleanupPolecat(polecatName string) error {
 		}
 	}
 
-	// 2. Remove worktree (this also removes the directory)
+	// 3. Remove worktree (this also removes the directory)
+	// Use force=true since we've already verified no uncommitted work
 	fmt.Printf("    Removing worktree...\n")
-	if err := polecatMgr.Remove(polecatName, true); err != nil {
+	if err := polecatMgr.RemoveWithOptions(polecatName, true, true); err != nil {
 		// Only error if polecat actually exists
 		if !errors.Is(err, polecat.ErrPolecatNotFound) {
 			return fmt.Errorf("removing worktree: %w", err)
 		}
 	}
 
-	// 3. Delete branch from mayor's clone
+	// 4. Delete branch from mayor's clone
 	branchName := fmt.Sprintf("polecat/%s", polecatName)
 	mayorPath := filepath.Join(m.rig.Path, "mayor", "rig")
 	mayorGit := git.NewGit(mayorPath)

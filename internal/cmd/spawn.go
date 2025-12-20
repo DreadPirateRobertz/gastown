@@ -182,6 +182,29 @@ func runSpawn(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("polecat '%s' is already working on %s", polecatName, pc.Issue)
 	}
 
+	// Check for uncommitted work in existing polecat (safety check)
+	pGit := git.NewGit(pc.ClonePath)
+	workStatus, err := pGit.CheckUncommittedWork()
+	if err == nil && !workStatus.Clean() {
+		fmt.Printf("\n%s Polecat has uncommitted work:\n", style.Warning.Render("⚠"))
+		if workStatus.HasUncommittedChanges {
+			fmt.Printf("  • %d uncommitted change(s)\n", len(workStatus.ModifiedFiles)+len(workStatus.UntrackedFiles))
+		}
+		if workStatus.StashCount > 0 {
+			fmt.Printf("  • %d stash(es)\n", workStatus.StashCount)
+		}
+		if workStatus.UnpushedCommits > 0 {
+			fmt.Printf("  • %d unpushed commit(s)\n", workStatus.UnpushedCommits)
+		}
+		fmt.Println()
+		if !spawnForce {
+			return fmt.Errorf("polecat '%s' has uncommitted work (%s)\nCommit or stash changes before spawning, or use --force to proceed anyway",
+				polecatName, workStatus.String())
+		}
+		fmt.Printf("%s Proceeding with --force (uncommitted work may be lost if polecat is cleaned up)\n",
+			style.Dim.Render("Warning:"))
+	}
+
 	// Check for unread mail in polecat's inbox (indicates existing unstarted work)
 	polecatAddress := fmt.Sprintf("%s/%s", rigName, polecatName)
 	router := mail.NewRouter(r.Path)

@@ -15,10 +15,25 @@ import (
 
 // Common errors
 var (
-	ErrPolecatExists   = errors.New("polecat already exists")
-	ErrPolecatNotFound = errors.New("polecat not found")
-	ErrHasChanges      = errors.New("polecat has uncommitted changes")
+	ErrPolecatExists     = errors.New("polecat already exists")
+	ErrPolecatNotFound   = errors.New("polecat not found")
+	ErrHasChanges        = errors.New("polecat has uncommitted changes")
+	ErrHasUncommittedWork = errors.New("polecat has uncommitted work")
 )
+
+// UncommittedWorkError provides details about uncommitted work.
+type UncommittedWorkError struct {
+	PolecatName string
+	Status      *git.UncommittedWorkStatus
+}
+
+func (e *UncommittedWorkError) Error() string {
+	return fmt.Sprintf("polecat %s has uncommitted work: %s", e.PolecatName, e.Status.String())
+}
+
+func (e *UncommittedWorkError) Unwrap() error {
+	return ErrHasUncommittedWork
+}
 
 // Manager handles polecat lifecycle.
 type Manager struct {
@@ -141,8 +156,16 @@ func (m *Manager) Add(name string) (*Polecat, error) {
 }
 
 // Remove deletes a polecat worktree.
-// If force is true, removes even with uncommitted changes.
+// If force is true, removes even with uncommitted changes (but not stashes/unpushed).
+// Use nuclear=true to bypass ALL safety checks.
 func (m *Manager) Remove(name string, force bool) error {
+	return m.RemoveWithOptions(name, force, false)
+}
+
+// RemoveWithOptions deletes a polecat worktree with explicit control over safety checks.
+// force=true: bypass uncommitted changes check (legacy behavior)
+// nuclear=true: bypass ALL safety checks including stashes and unpushed commits
+func (m *Manager) RemoveWithOptions(name string, force, nuclear bool) error {
 	if !m.exists(name) {
 		return ErrPolecatNotFound
 	}
@@ -150,11 +173,19 @@ func (m *Manager) Remove(name string, force bool) error {
 	polecatPath := m.polecatDir(name)
 	polecatGit := git.NewGit(polecatPath)
 
-	// Check for uncommitted changes unless force
-	if !force {
-		hasChanges, err := polecatGit.HasUncommittedChanges()
-		if err == nil && hasChanges {
-			return ErrHasChanges
+	// Check for uncommitted work unless bypassed
+	if !nuclear {
+		status, err := polecatGit.CheckUncommittedWork()
+		if err == nil && !status.Clean() {
+			// For backward compatibility: force only bypasses uncommitted changes, not stashes/unpushed
+			if force {
+				// Force mode: allow uncommitted changes but still block on stashes/unpushed
+				if status.StashCount > 0 || status.UnpushedCommits > 0 {
+					return &UncommittedWorkError{PolecatName: name, Status: status}
+				}
+			} else {
+				return &UncommittedWorkError{PolecatName: name, Status: status}
+			}
 		}
 	}
 

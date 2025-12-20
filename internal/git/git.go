@@ -525,3 +525,117 @@ func (g *Git) CommitsAhead(base, branch string) (int, error) {
 
 	return count, nil
 }
+
+// StashCount returns the number of stashes in the repository.
+func (g *Git) StashCount() (int, error) {
+	out, err := g.run("stash", "list")
+	if err != nil {
+		return 0, err
+	}
+
+	if out == "" {
+		return 0, nil
+	}
+
+	// Count lines in the stash list
+	lines := strings.Split(out, "\n")
+	count := 0
+	for _, line := range lines {
+		if line != "" {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// UnpushedCommits returns the number of commits that are not pushed to the remote.
+// It checks if the current branch has an upstream and counts commits ahead.
+// Returns 0 if there is no upstream configured.
+func (g *Git) UnpushedCommits() (int, error) {
+	// Get the upstream branch
+	upstream, err := g.run("rev-parse", "--abbrev-ref", "@{u}")
+	if err != nil {
+		// No upstream configured - this is common for polecat branches
+		// Check if we can compare against origin/main instead
+		// If we can't get any reference, return 0 (benefit of the doubt)
+		return 0, nil
+	}
+
+	// Count commits between upstream and HEAD
+	out, err := g.run("rev-list", "--count", upstream+"..HEAD")
+	if err != nil {
+		return 0, err
+	}
+
+	var count int
+	_, err = fmt.Sscanf(out, "%d", &count)
+	if err != nil {
+		return 0, fmt.Errorf("parsing unpushed count: %w", err)
+	}
+
+	return count, nil
+}
+
+// UncommittedWorkStatus contains information about uncommitted work in a repo.
+type UncommittedWorkStatus struct {
+	HasUncommittedChanges bool
+	StashCount            int
+	UnpushedCommits       int
+	// Details for error messages
+	ModifiedFiles   []string
+	UntrackedFiles  []string
+}
+
+// Clean returns true if there is no uncommitted work.
+func (s *UncommittedWorkStatus) Clean() bool {
+	return !s.HasUncommittedChanges && s.StashCount == 0 && s.UnpushedCommits == 0
+}
+
+// String returns a human-readable summary of uncommitted work.
+func (s *UncommittedWorkStatus) String() string {
+	var issues []string
+	if s.HasUncommittedChanges {
+		issues = append(issues, fmt.Sprintf("%d uncommitted change(s)", len(s.ModifiedFiles)+len(s.UntrackedFiles)))
+	}
+	if s.StashCount > 0 {
+		issues = append(issues, fmt.Sprintf("%d stash(es)", s.StashCount))
+	}
+	if s.UnpushedCommits > 0 {
+		issues = append(issues, fmt.Sprintf("%d unpushed commit(s)", s.UnpushedCommits))
+	}
+	if len(issues) == 0 {
+		return "clean"
+	}
+	return strings.Join(issues, ", ")
+}
+
+// CheckUncommittedWork performs a comprehensive check for uncommitted work.
+func (g *Git) CheckUncommittedWork() (*UncommittedWorkStatus, error) {
+	status := &UncommittedWorkStatus{}
+
+	// Check git status
+	gitStatus, err := g.Status()
+	if err != nil {
+		return nil, fmt.Errorf("checking git status: %w", err)
+	}
+	status.HasUncommittedChanges = !gitStatus.Clean
+	status.ModifiedFiles = append(gitStatus.Modified, gitStatus.Added...)
+	status.ModifiedFiles = append(status.ModifiedFiles, gitStatus.Deleted...)
+	status.UntrackedFiles = gitStatus.Untracked
+
+	// Check stashes
+	stashCount, err := g.StashCount()
+	if err != nil {
+		return nil, fmt.Errorf("checking stashes: %w", err)
+	}
+	status.StashCount = stashCount
+
+	// Check unpushed commits
+	unpushed, err := g.UnpushedCommits()
+	if err != nil {
+		return nil, fmt.Errorf("checking unpushed commits: %w", err)
+	}
+	status.UnpushedCommits = unpushed
+
+	return status, nil
+}

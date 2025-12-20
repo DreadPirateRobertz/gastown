@@ -11,6 +11,7 @@ import (
 	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/git"
+	"github.com/steveyegge/gastown/internal/polecat"
 	"github.com/steveyegge/gastown/internal/refinery"
 	"github.com/steveyegge/gastown/internal/rig"
 	"github.com/steveyegge/gastown/internal/session"
@@ -91,22 +92,30 @@ This command gracefully shuts down:
 - The refinery (if running)
 - The witness (if running)
 
+Before shutdown, checks all polecats for uncommitted work:
+- Uncommitted changes (modified/untracked files)
+- Stashes
+- Unpushed commits
+
 Use --force to skip graceful shutdown and kill immediately.
+Use --nuclear to bypass ALL safety checks (will lose work!).
 
 Examples:
   gt rig shutdown gastown
-  gt rig shutdown gastown --force`,
+  gt rig shutdown gastown --force
+  gt rig shutdown gastown --nuclear  # DANGER: loses uncommitted work`,
 	Args: cobra.ExactArgs(1),
 	RunE: runRigShutdown,
 }
 
 // Flags
 var (
-	rigAddPrefix      string
-	rigAddCrew        string
-	rigResetHandoff   bool
-	rigResetRole      string
-	rigShutdownForce  bool
+	rigAddPrefix       string
+	rigAddCrew         string
+	rigResetHandoff    bool
+	rigResetRole       string
+	rigShutdownForce   bool
+	rigShutdownNuclear bool
 )
 
 func init() {
@@ -124,6 +133,7 @@ func init() {
 	rigResetCmd.Flags().StringVar(&rigResetRole, "role", "", "Role to reset (default: auto-detect from cwd)")
 
 	rigShutdownCmd.Flags().BoolVarP(&rigShutdownForce, "force", "f", false, "Force immediate shutdown")
+	rigShutdownCmd.Flags().BoolVar(&rigShutdownNuclear, "nuclear", false, "DANGER: Bypass ALL safety checks (loses uncommitted work!)")
 }
 
 func runRigAdd(cmd *cobra.Command, args []string) error {
@@ -351,6 +361,39 @@ func runRigShutdown(cmd *cobra.Command, args []string) error {
 	r, err := rigMgr.GetRig(rigName)
 	if err != nil {
 		return fmt.Errorf("rig '%s' not found", rigName)
+	}
+
+	// Check all polecats for uncommitted work (unless nuclear)
+	if !rigShutdownNuclear {
+		polecatGit := git.NewGit(r.Path)
+		polecatMgr := polecat.NewManager(r, polecatGit)
+		polecats, err := polecatMgr.List()
+		if err == nil && len(polecats) > 0 {
+			var problemPolecats []struct {
+				name   string
+				status *git.UncommittedWorkStatus
+			}
+
+			for _, p := range polecats {
+				pGit := git.NewGit(p.ClonePath)
+				status, err := pGit.CheckUncommittedWork()
+				if err == nil && !status.Clean() {
+					problemPolecats = append(problemPolecats, struct {
+						name   string
+						status *git.UncommittedWorkStatus
+					}{p.Name, status})
+				}
+			}
+
+			if len(problemPolecats) > 0 {
+				fmt.Printf("\n%s Cannot shutdown - polecats have uncommitted work:\n\n", style.Warning.Render("⚠"))
+				for _, pp := range problemPolecats {
+					fmt.Printf("  %s: %s\n", style.Bold.Render(pp.name), pp.status.String())
+				}
+				fmt.Printf("\nUse %s to force shutdown (DANGER: will lose work!)\n", style.Bold.Render("--nuclear"))
+				return fmt.Errorf("refusing to shutdown with uncommitted work")
+			}
+		}
 	}
 
 	fmt.Printf("Shutting down rig %s...\n", style.Bold.Render(rigName))
