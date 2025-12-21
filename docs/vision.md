@@ -9,6 +9,24 @@ Gas Town is an **enterprise-grade cognitive processing machine**. It takes struc
 
 Think of it as the **IDE of 2026**: not a text editor with AI autocomplete, but a complete execution environment where AI agents are first-class workers with proper lifecycle management, coordination protocols, and quality gates.
 
+## The Steam Engine
+
+Gas Town is an engine. Engines do work and generate steam.
+
+| Component | Role | Metaphor |
+|-----------|------|----------|
+| **Proto molecules** | Workflow templates | Fuel |
+| **Wisps** | Transient execution traces | Steam |
+| **Digests** | Compressed work records | Distillate |
+
+**Protos** define how work should be done. **Wisps** are what happens during execution - transient, observable, but ultimately disposable. **Digests** are what remains: condensed permanent records of what was accomplished.
+
+Just as steam can dissipate or be condensed into useful output, wisps can be:
+- **Burned**: Discarded without trace (routine work, no audit needed)
+- **Squashed**: Compressed into a digest (preserve the outcome, discard the trace)
+
+This vocabulary runs through all of Gas Town: bond (instantiate), burn (discard), squash (compress), wisp (transient). It's a steam engine for work.
+
 ## Core Insights
 
 ### 1. Molecules Crystallize Workflows
@@ -96,7 +114,9 @@ Gas Town is an operating system for AI work:
 | Timer interrupts | Timed beads |
 | Semaphores | Resource beads |
 | Background services | Pinned beads |
-| Process templates | Molecules |
+| Process templates | Proto molecules |
+| Running processes | Wisp molecules |
+| Process termination | Burn (discard) or squash (save state) |
 | IPC | Mail beads |
 
 Just as Unix made computer resources manageable through a consistent process model, Gas Town makes AI agent work manageable through a consistent work model.
@@ -140,10 +160,10 @@ Town (global coordinator)
 - Recent history: fast retrieval
 - Archive: compressed cold storage
 
-**Temporal decay**: Ephemeral execution traces, permanent outcomes
-- Molecule step-by-step execution: memory only
-- Work outcomes: permanent record
-- Intermediate scaffolding: garbage collected
+**Temporal decay**: Wisps rise and dissipate, digests remain
+- Wisp molecules: transient execution traces (the steam)
+- Digests: permanent condensed records (the distillate)
+- Burn or squash: cleanup happens automatically, leaving clean ledger
 
 ## The Agent Hierarchy
 
@@ -169,9 +189,10 @@ Town (global coordinator)
 - Maintains branch hygiene
 
 ### Polecat (AI - Workers)
-- Implements assigned work
-- Follows molecule workflows
+- Executes wisp molecules (not just "assigned work")
+- Generates summaries and squashes to digest on completion
 - Files discovered issues
+- Ephemeral like the wisps they execute - spawn, work, disappear
 
 ## Quality Through Structure
 

@@ -6,6 +6,13 @@ Gas Town is a multi-agent workspace manager that coordinates AI coding agents wo
 
 **Molecule-first paradigm**: Gas Town is fundamentally a molecule execution engine. Workers don't just "work on issues" - they execute molecules. The issue is seed data; the molecule defines the workflow. This enables nondeterministic idempotence: any worker can pick up where another left off, surviving crashes, context compaction, and restarts. If a process requires cognition, it should be a molecule. See [Molecules](#molecules-composable-workflow-templates) for full details.
 
+**The Steam Engine Metaphor**: Gas Town is an engine. Engines do work and generate steam. In our system:
+- **Proto molecules** are the fuel (templates that define workflows)
+- **Wisps** are the steam (transient execution traces that rise and dissipate)
+- **Digests** are the distillate (condensed permanent records of completed work)
+
+Just as steam can dissipate or be condensed into useful output, wisps can be burned (cleaned up) or squashed (compressed into digests). This metaphor runs through all of Gas Town's vocabulary: bond, burn, squash, wisp.
+
 ## System Overview
 
 ```mermaid
@@ -310,7 +317,9 @@ rig/
 | Timer interrupts | Timed beads |
 | Semaphores | Resource beads |
 | Background services | Pinned beads |
-| Process templates | Molecules |
+| Process templates | Proto molecules |
+| Running processes | Wisp molecules |
+| Process termination | Burn (discard) or squash (save state) |
 | IPC | Mail beads |
 
 ## Molecules: Composable Workflow Templates
@@ -321,11 +330,14 @@ Molecules are **crystallized, composable, nondeterministic-idempotent workflow t
 
 | Concept | Name | Description |
 |---------|------|-------------|
-| Template | **Molecule** | Read-only workflow pattern (beads issue with type=molecule) |
+| Template | **Proto Molecule** | Read-only workflow pattern (the "fuel") |
+| Running execution | **Wisp Molecule** | Transient execution trace (the "steam") |
+| Permanent record | **Digest** | Compressed summary of completed work (the "distillate") |
 | Individual step | **Atom/Step** | Smallest unit of work within a molecule |
-| Dependency | **Bond** | Connection between steps (Needs: directive) |
+| Dependency | **Bond** | Connection between steps (Needs: directive); also the act of instantiation |
 | Composed molecule | **Polymer/Derived** | Molecule built from other molecules |
-| Concrete work | **Instance** | Beads created when molecule is instantiated |
+| Discard execution | **Burn** | Delete wisps without saving (routine work) |
+| Compress execution | **Squash** | Compress wisps into a digest (preserve outcome) |
 
 ### Molecule Format
 
@@ -413,6 +425,80 @@ This is like a **distributed work queue** backed by beads:
 - Git is the persistence layer
 - No separate message broker needed
 - Full auditability of who did what, when
+
+### Wisp Molecules: Transient Execution Traces
+
+**Wisps** are ephemeral execution traces - the "steam" in Gas Town's engine metaphor. When a molecule executes, it generates wisps: transient issues that capture the work being done.
+
+**Why wisps?**
+- **Observability**: See what's happening during execution without cluttering the permanent ledger
+- **Recovery**: Wisps provide checkpoints for crash recovery
+- **Compression**: Squash wisps into a digest when done - keep the outcome, discard the trace
+- **Clean ledger**: Permanent beads show what was accomplished; wisps show how (temporarily)
+
+**Wisp workflow:**
+
+```
+Proto Molecule (template)
+         │
+         ▼ bond
+    Wisp Molecule (execution)
+         │
+    ┌────┴────┐
+    ▼         ▼
+  burn     squash
+(discard)  (digest)
+```
+
+1. **Bond**: Instantiate a proto molecule as a wisp molecule with transient children
+2. **Execute**: Agents work on wisp children, marking steps complete
+3. **Complete**: When done, either:
+   - **Burn**: Discard wisps entirely (routine work, no audit needed)
+   - **Squash**: Compress wisps into a digest (preserve summary of what was done)
+
+**Wisp structure:**
+
+```
+gt-abc123 (Proto: engineer-in-box)
+    │
+    ▼ bond
+gt-abc123.exec-001 (Wisp Molecule)  ← wisp=true, parent=gt-abc123
+    ├── gt-abc123.exec-001.design     ← wisp child
+    ├── gt-abc123.exec-001.implement  ← wisp child
+    ├── gt-abc123.exec-001.review     ← wisp child
+    └── gt-abc123.exec-001.test       ← wisp child
+    │
+    ▼ squash
+gt-abc123.digest-001 (Digest)       ← wisp=false, permanent
+```
+
+**Wisp commands:**
+
+```bash
+bd mol bond gt-abc123                    # Create wisp molecule from proto
+bd mol bond gt-abc123 --template=quick   # Use specific template
+bd mol squash gt-abc123.exec-001         # Compress wisps to digest
+bd mol squash --summary="Agent summary"  # With agent-generated summary
+bd mol burn gt-abc123.exec-001           # Discard wisps without digest
+```
+
+**Wisp storage:**
+
+Wisps are stored in a per-rig ephemeral database:
+- `<rig>/.beads-ephemeral/` - Separate from permanent beads
+- Fast writes, no sync overhead
+- Auto-cleaned on squash/burn
+- Digests write to permanent beads
+
+**Patrols use wisps:**
+
+Patrol agents (long-running monitors) execute in infinite wisp loops:
+1. Execute molecule as wisp
+2. Squash to digest (compressed activity record)
+3. Sleep/wait for trigger
+4. Repeat
+
+This gives patrols full audit trails without ledger bloat.
 
 ### Step States
 
@@ -1146,13 +1232,22 @@ sequenceDiagram
 ### Polecat
 
 Polecats are the workers that do actual implementation:
-- **Issue completion**: Work on assigned beads issues
+- **Molecule execution**: Execute wisp molecules (not just "work on issues")
 - **Self-verification**: Run decommission checklist before signaling done
 - **Beads access**: Create issues for discovered work, close completed work
 - **Clean handoff**: Ensure git state is clean for Witness verification
 - **Shutdown request**: Request own termination via `gt handoff` (bottom-up lifecycle)
 
-**Polecats are ephemeral**: They exist only while working. When done, they request shutdown and are deleted (worktree removed, branch deleted). There is no "idle pool" of polecats.
+**Polecats are like wisps**: They exist only while working. When done, they request shutdown and are deleted (worktree removed, branch deleted). There is no "idle pool" of polecats.
+
+**Polecat workflow** (molecule-first):
+1. Spawn receives issue + proto molecule template
+2. Bond creates wisp molecule from proto
+3. Polecat executes wisp steps (design → implement → test → submit)
+4. On completion, polecat generates summary and squashes wisps to digest
+5. Request shutdown, get deleted
+
+The polecat itself is ephemeral, and so is its execution trace (wisps). Only the digest survives.
 
 ## Key Workflows
 
@@ -1228,12 +1323,15 @@ sequenceDiagram
     participant P as 🐱 Polecat
     participant R as 🔧 Refinery
     participant W as 👁 Witness
+    participant B as 📦 Beads
 
-    P->>P: Complete work
+    P->>P: Complete wisp steps
+    P->>P: Generate summary
+    P->>B: Squash wisps → digest
     P->>R: Submit to merge queue
     P->>P: Run gt handoff
 
-    Note over P: Verify git clean,<br/>PR exists
+    Note over P: Verify git clean,<br/>PR exists,<br/>wisps squashed
 
     P->>W: Mail: "Shutdown request"
     P->>P: Set state = pending_shutdown
@@ -1243,6 +1341,8 @@ sequenceDiagram
     W->>W: git worktree remove
     W->>W: git branch -d
 ```
+
+**Key change**: Polecats generate their own summaries and squash wisps before handoff. The digest is the permanent record of what the polecat accomplished. This keeps beads as a pure tool - agents provide the intelligence for summarization.
 
 **gt handoff command** (run by polecat):
 1. Verify git state clean (no uncommitted changes)
