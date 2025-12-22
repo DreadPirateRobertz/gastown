@@ -609,6 +609,9 @@ func (m *Manager) loadFromBeads(name string) (*Polecat, error) {
 //	    <name>/
 //	      .beads/
 //	        redirect       <- Contains "../../.beads"
+//
+// IMPORTANT: If the polecat was created from a branch that had .beads/ tracked in git,
+// those files will be present. We must clean them out and replace with just the redirect.
 func (m *Manager) setupSharedBeads(polecatPath string) error {
 	// Ensure rig root has .beads/ directory
 	rigBeadsDir := filepath.Join(m.rig.Path, ".beads")
@@ -616,16 +619,27 @@ func (m *Manager) setupSharedBeads(polecatPath string) error {
 		return fmt.Errorf("creating rig .beads dir: %w", err)
 	}
 
-	// Create polecat's .beads directory
+	// Clean up any existing .beads/ contents from the branch
+	// This handles the case where the polecat was created from a branch that
+	// had .beads/ tracked (e.g., from previous bd sync operations)
 	polecatBeadsDir := filepath.Join(polecatPath, ".beads")
+	if _, err := os.Stat(polecatBeadsDir); err == nil {
+		// Directory exists - remove it entirely and recreate fresh
+		if err := os.RemoveAll(polecatBeadsDir); err != nil {
+			return fmt.Errorf("cleaning existing .beads dir: %w", err)
+		}
+	}
+
+	// Create fresh .beads directory
 	if err := os.MkdirAll(polecatBeadsDir, 0755); err != nil {
 		return fmt.Errorf("creating polecat .beads dir: %w", err)
 	}
 
-	// Create redirect file pointing to rig's .beads
-	// Path is relative from polecats/<name>/.beads/ to rig/.beads/
+	// Create redirect file pointing to mayor/rig/.beads (the canonical beads location)
+	// Path is relative from polecats/<name>/.beads/ to mayor/rig/.beads/
+	// We go directly to mayor/rig/.beads, not through rig root, to match crew workers
 	redirectPath := filepath.Join(polecatBeadsDir, "redirect")
-	redirectContent := "../../.beads\n"
+	redirectContent := "../../mayor/rig/.beads\n"
 
 	if err := os.WriteFile(redirectPath, []byte(redirectContent), 0644); err != nil {
 		return fmt.Errorf("creating redirect file: %w", err)
