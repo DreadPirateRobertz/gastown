@@ -92,8 +92,8 @@ func runPrime(cmd *cobra.Command, args []string) error {
 	// Output handoff content if present
 	outputHandoffContent(ctx)
 
-	// Output crew attachment status (for autonomous work detection)
-	outputCrewAttachmentStatus(ctx)
+	// Output attachment status (for autonomous work detection)
+	outputAttachmentStatus(ctx)
 
 	// Output molecule context if working on a molecule step
 	outputMoleculeContext(ctx)
@@ -497,18 +497,25 @@ func runMailCheckInject(workDir string) {
 	}
 }
 
-// outputCrewAttachmentStatus checks for attached work molecule and outputs status.
+// outputAttachmentStatus checks for attached work molecule and outputs status.
 // This is key for the autonomous overnight work pattern.
-func outputCrewAttachmentStatus(ctx RoleContext) {
-	if ctx.Role != RoleCrew {
+// The Propulsion Principle: "If you find something on your hook, YOU RUN IT."
+func outputAttachmentStatus(ctx RoleContext) {
+	if ctx.Role != RoleCrew && ctx.Role != RolePolecat {
 		return
 	}
 
 	// Check for pinned beads with attachments
 	b := beads.New(ctx.WorkDir)
 
-	// Build assignee string for crew worker
-	assignee := fmt.Sprintf("%s/crew/%s", ctx.Rig, ctx.Polecat)
+	// Build assignee string based on role
+	var assignee string
+	switch ctx.Role {
+	case RoleCrew:
+		assignee = fmt.Sprintf("%s/crew/%s", ctx.Rig, ctx.Polecat)
+	case RolePolecat:
+		assignee = fmt.Sprintf("%s/%s", ctx.Rig, ctx.Polecat)
+	}
 
 	// Find pinned beads for this agent
 	pinnedBeads, err := b.List(beads.ListOptions{
