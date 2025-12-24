@@ -30,25 +30,25 @@ steps and exit conditions. The molecule is your contract:
 
 Your molecule is attached to your handoff bead:
 ```bash
-# Find your pinned assignment
+# See your current molecule and step at a glance
+bd mol current
+
+# Or manually find your assignment
 bd list --pinned --assignee=$BEADS_AGENT_NAME
-
-# View your molecule and its steps
 bd show <mol-id>
-
-# Find your current step (first in_progress or next unblocked)
-bd ready --parent=<mol-id>
 ```
 
 ### Working Through Steps
 
 Steps have dependencies (`Needs: step1, step2`). Work in order:
 
-1. Find the next ready step: `bd ready --parent=<mol-id>`
-2. Mark it in_progress: `bd update <step-id> --status=in_progress`
-3. Do the work
-4. Mark complete: `bd close <step-id>`
-5. Repeat until exit-decision step
+1. Check your current step: `bd mol current`
+2. Do the work
+3. Close and auto-advance: `bd close <step-id> --continue`
+4. Repeat until exit-decision step
+
+The `--continue` flag closes your step and automatically marks the next ready step
+as in_progress. No friction, no forgetting. This is the **Propulsion Principle**.
 
 ### Exit Strategies
 

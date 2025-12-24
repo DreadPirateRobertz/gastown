@@ -146,17 +146,19 @@ This enables **overnight autonomous work** on long molecules.
 ### Working on Attached Molecules
 
 ```bash
-# Check what's attached
+# Check what's attached and see current step
 gt mol status
+bd mol current
 
-# Find next ready step in the attached work
-bd ready --parent=<work-mol-root>
-
-# Work the step
-bd update <step> --status=in_progress
+# Work the step (current step shown by bd mol current)
 # ... do the work ...
-bd close <step>
+
+# Close and auto-advance to next step
+bd close <step> --continue
 ```
+
+The `--continue` flag closes your step and automatically marks the next ready step
+as in_progress. This is the **Propulsion Principle** - seamless step transitions.
 
 ### Attaching Work (for the overseer)
 

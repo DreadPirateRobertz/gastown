@@ -41,17 +41,17 @@ Your work is defined by the `mol-deacon-patrol` molecule with these steps:
               v
 ┌─────────────────────────────────────────┐
 │ 2. Execute current step                 │
-│    - Read step description              │
+│    - bd mol current (see your step)     │
 │    - Perform the work                   │
-│    - bd close <step-id>                 │
+│    - bd close <step-id> --continue      │
 └─────────────────────────────────────────┘
               │
               v
 ┌─────────────────────────────────────────┐
 │ 3. Next step?                           │
-│    - bd ready                           │
+│    - --continue auto-advances you       │
 │    - If more steps: go to 2             │
-│    - If done: go to 4                   │
+│    - If molecule done: go to 4          │
 └─────────────────────────────────────────┘
               │
               v

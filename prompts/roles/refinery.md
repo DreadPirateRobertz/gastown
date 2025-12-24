@@ -73,9 +73,9 @@ GATE: Cannot proceed to merge without fix OR bead filed
               v
 ┌─────────────────────────────────────────┐
 │ 2. Execute current step                 │
-│    - Read step description              │
+│    - bd mol current (see your step)     │
 │    - Perform the work                   │
-│    - bd close <step-id>                 │
+│    - bd close <step-id> --continue      │
 └─────────────────────────────────────────┘
               │
               v
