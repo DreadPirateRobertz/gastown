@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/steveyegge/gastown/internal/beads"
@@ -151,6 +152,11 @@ func (m *Manager) Add(name string) (*Polecat, error) {
 	// git worktree add -b polecat/<name>-<timestamp> <path>
 	if err := repoGit.WorktreeAdd(polecatPath, branchName); err != nil {
 		return nil, fmt.Errorf("creating worktree: %w", err)
+	}
+
+	// Install polecat CLAUDE.md template (non-fatal if template missing)
+	if err := m.installCLAUDETemplate(polecatPath, name); err != nil {
+		fmt.Printf("Warning: could not install CLAUDE.md template: %v\n", err)
 	}
 
 	// Set up shared beads: polecat uses rig's .beads via redirect file.
@@ -342,6 +348,11 @@ func (m *Manager) Recreate(name string, force bool) (*Polecat, error) {
 	branchName := fmt.Sprintf("polecat/%s-%d", name, time.Now().UnixMilli())
 	if err := repoGit.WorktreeAdd(polecatPath, branchName); err != nil {
 		return nil, fmt.Errorf("creating fresh worktree: %w", err)
+	}
+
+	// Install polecat CLAUDE.md template (non-fatal if template missing)
+	if err := m.installCLAUDETemplate(polecatPath, name); err != nil {
+		fmt.Printf("Warning: could not install CLAUDE.md template: %v\n", err)
 	}
 
 	// Set up shared beads
@@ -645,6 +656,35 @@ func (m *Manager) loadFromBeads(name string) (*Polecat, error) {
 		Branch:    branchName,
 		Issue:     issueID,
 	}, nil
+}
+
+// installCLAUDETemplate copies the polecat CLAUDE.md template into the worktree.
+// Template variables {{rig}} and {{name}} are substituted with actual values.
+// This provides polecats with context about their role and available commands.
+func (m *Manager) installCLAUDETemplate(polecatPath, name string) error {
+	// Read template from rig's templates directory
+	templatePath := filepath.Join(m.rig.Path, "templates", "polecat-CLAUDE.md")
+	content, err := os.ReadFile(templatePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Template doesn't exist - this is fine, just skip
+			return nil
+		}
+		return fmt.Errorf("reading template: %w", err)
+	}
+
+	// Substitute template variables
+	output := string(content)
+	output = strings.ReplaceAll(output, "{{rig}}", m.rig.Name)
+	output = strings.ReplaceAll(output, "{{name}}", name)
+
+	// Write to polecat's CLAUDE.md
+	claudePath := filepath.Join(polecatPath, "CLAUDE.md")
+	if err := os.WriteFile(claudePath, []byte(output), 0644); err != nil {
+		return fmt.Errorf("writing CLAUDE.md: %w", err)
+	}
+
+	return nil
 }
 
 // setupSharedBeads creates a redirect file so the polecat uses the rig's shared .beads database.
