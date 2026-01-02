@@ -286,9 +286,32 @@ func initTownBeads(townPath string) error {
 	if err != nil {
 		// Check if beads is already initialized
 		if strings.Contains(string(output), "already initialized") {
-			return nil // Already initialized is fine
+			// Already initialized - still need to ensure fingerprint exists
+		} else {
+			return fmt.Errorf("bd init failed: %s", strings.TrimSpace(string(output)))
 		}
-		return fmt.Errorf("bd init failed: %s", strings.TrimSpace(string(output)))
+	}
+
+	// Ensure database has repository fingerprint (GH #25).
+	// This is idempotent - safe on both new and legacy (pre-0.17.5) databases.
+	// Without fingerprint, the bd daemon fails to start silently.
+	if err := ensureRepoFingerprint(townPath); err != nil {
+		// Non-fatal: fingerprint is optional for functionality, just daemon optimization
+		fmt.Printf("   %s Could not verify repo fingerprint: %v\n", style.Dim.Render("⚠"), err)
+	}
+
+	return nil
+}
+
+// ensureRepoFingerprint runs bd migrate --update-repo-id to ensure the database
+// has a repository fingerprint. Legacy databases (pre-0.17.5) lack this, which
+// prevents the daemon from starting properly.
+func ensureRepoFingerprint(beadsPath string) error {
+	cmd := exec.Command("bd", "migrate", "--update-repo-id")
+	cmd.Dir = beadsPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("bd migrate --update-repo-id: %s", strings.TrimSpace(string(output)))
 	}
 	return nil
 }

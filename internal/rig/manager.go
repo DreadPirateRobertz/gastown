@@ -435,6 +435,15 @@ func (m *Manager) initBeads(rigPath, prefix string) error {
 			return writeErr
 		}
 	}
+
+	// Ensure database has repository fingerprint (GH #25).
+	// This is idempotent - safe on both new and legacy (pre-0.17.5) databases.
+	// Without fingerprint, the bd daemon fails to start silently.
+	migrateCmd := exec.Command("bd", "migrate", "--update-repo-id")
+	migrateCmd.Dir = rigPath
+	// Ignore errors - fingerprint is optional for functionality
+	_, _ = migrateCmd.CombinedOutput()
+
 	return nil
 }
 
