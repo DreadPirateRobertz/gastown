@@ -761,7 +761,29 @@ func (g *Git) BranchPushedToRemote(localBranch, remote string) (bool, int, error
 	// Check if local is ahead
 	count, err := g.run("rev-list", "--count", remoteBranch+"..HEAD")
 	if err != nil {
-		return false, 0, fmt.Errorf("counting unpushed commits: %w", err)
+		// Fallback: If we can't use the tracking ref (possibly missing remote.origin.fetch),
+		// get the remote commit SHA directly via ls-remote and compare.
+		// See: gt-0eh3r (gt done fails in worktree with missing remote.origin.fetch config)
+		remoteSHA, lsErr := g.run("ls-remote", remote, "refs/heads/"+localBranch)
+		if lsErr != nil {
+			return false, 0, fmt.Errorf("counting unpushed commits: %w (fallback also failed: %v)", err, lsErr)
+		}
+		// Parse SHA from ls-remote output (format: "<sha>\trefs/heads/<branch>")
+		remoteSHA = strings.TrimSpace(remoteSHA)
+		if remoteSHA == "" {
+			return false, 0, fmt.Errorf("counting unpushed commits: %w (remote branch not found)", err)
+		}
+		parts := strings.Fields(remoteSHA)
+		if len(parts) == 0 {
+			return false, 0, fmt.Errorf("counting unpushed commits: %w (invalid ls-remote output)", err)
+		}
+		remoteSHA = parts[0]
+
+		// Count commits from remote SHA to HEAD
+		count, err = g.run("rev-list", "--count", remoteSHA+"..HEAD")
+		if err != nil {
+			return false, 0, fmt.Errorf("counting unpushed commits (fallback): %w", err)
+		}
 	}
 
 	var n int
