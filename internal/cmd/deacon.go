@@ -205,6 +205,35 @@ Examples:
 	RunE: runDeaconStaleHooks,
 }
 
+var deaconPauseCmd = &cobra.Command{
+	Use:   "pause",
+	Short: "Pause the Deacon to prevent patrol actions",
+	Long: `Pause the Deacon to prevent it from performing any patrol actions.
+
+When paused, the Deacon:
+- Will not create patrol molecules
+- Will not run health checks
+- Will not take any autonomous actions
+- Will display a PAUSED message on startup
+
+The pause state persists across session restarts. Use 'gt deacon resume'
+to allow the Deacon to work again.
+
+Examples:
+  gt deacon pause                           # Pause with no reason
+  gt deacon pause --reason="testing"        # Pause with a reason`,
+	RunE: runDeaconPause,
+}
+
+var deaconResumeCmd = &cobra.Command{
+	Use:   "resume",
+	Short: "Resume the Deacon to allow patrol actions",
+	Long: `Resume the Deacon so it can perform patrol actions again.
+
+This removes the pause file and allows the Deacon to work normally.`,
+	RunE: runDeaconResume,
+}
+
 var (
 	triggerTimeout time.Duration
 
@@ -220,6 +249,9 @@ var (
 	// Stale hooks flags
 	staleHooksMaxAge time.Duration
 	staleHooksDryRun bool
+
+	// Pause flags
+	pauseReason string
 )
 
 func init() {
@@ -234,6 +266,8 @@ func init() {
 	deaconCmd.AddCommand(deaconForceKillCmd)
 	deaconCmd.AddCommand(deaconHealthStateCmd)
 	deaconCmd.AddCommand(deaconStaleHooksCmd)
+	deaconCmd.AddCommand(deaconPauseCmd)
+	deaconCmd.AddCommand(deaconResumeCmd)
 
 	// Flags for trigger-pending
 	deaconTriggerPendingCmd.Flags().DurationVar(&triggerTimeout, "timeout", 2*time.Second,
@@ -258,6 +292,10 @@ func init() {
 		"Maximum age before a hooked bead is considered stale")
 	deaconStaleHooksCmd.Flags().BoolVar(&staleHooksDryRun, "dry-run", false,
 		"Preview what would be unhooked without making changes")
+
+	// Flags for pause
+	deaconPauseCmd.Flags().StringVar(&pauseReason, "reason", "",
+		"Reason for pausing the Deacon")
 
 	deaconStartCmd.Flags().StringVar(&deaconAgentOverride, "agent", "", "Agent alias to run the Deacon with (overrides town default)")
 	deaconAttachCmd.Flags().StringVar(&deaconAgentOverride, "agent", "", "Agent alias to run the Deacon with (overrides town default)")
@@ -418,6 +456,23 @@ func runDeaconStatus(cmd *cobra.Command, args []string) error {
 
 	sessionName := getDeaconSessionName()
 
+	// Check pause state first (most important)
+	townRoot, _ := workspace.FindFromCwdOrError()
+	if townRoot != "" {
+		paused, state, err := deacon.IsPaused(townRoot)
+		if err == nil && paused {
+			fmt.Printf("%s DEACON PAUSED\n", style.Bold.Render("⏸️"))
+			if state.Reason != "" {
+				fmt.Printf("  Reason: %s\n", state.Reason)
+			}
+			fmt.Printf("  Paused at: %s\n", state.PausedAt.Format(time.RFC3339))
+			fmt.Printf("  Paused by: %s\n", state.PausedBy)
+			fmt.Println()
+			fmt.Printf("Resume with: %s\n", style.Dim.Render("gt deacon resume"))
+			fmt.Println()
+		}
+	}
+
 	running, err := t.HasSession(sessionName)
 	if err != nil {
 		return fmt.Errorf("checking session: %w", err)
@@ -485,6 +540,19 @@ func runDeaconHeartbeat(cmd *cobra.Command, args []string) error {
 	townRoot, err := workspace.FindFromCwdOrError()
 	if err != nil {
 		return fmt.Errorf("not in a Gas Town workspace: %w", err)
+	}
+
+	// Check if Deacon is paused - if so, refuse to update heartbeat
+	paused, state, err := deacon.IsPaused(townRoot)
+	if err != nil {
+		return fmt.Errorf("checking pause state: %w", err)
+	}
+	if paused {
+		fmt.Printf("%s Deacon is paused. Use 'gt deacon resume' to unpause.\n", style.Bold.Render("⏸️"))
+		if state.Reason != "" {
+			fmt.Printf("  Reason: %s\n", state.Reason)
+		}
+		return errors.New("Deacon is paused")
 	}
 
 	action := ""
@@ -948,6 +1016,71 @@ func runDeaconStaleHooks(cmd *cobra.Command, args []string) error {
 		fmt.Printf("\n%s Unhooked %d stale bead(s)\n",
 			style.Bold.Render("✓"), result.Unhooked)
 	}
+
+	return nil
+}
+
+// runDeaconPause pauses the Deacon to prevent patrol actions.
+func runDeaconPause(cmd *cobra.Command, args []string) error {
+	townRoot, err := workspace.FindFromCwdOrError()
+	if err != nil {
+		return fmt.Errorf("not in a Gas Town workspace: %w", err)
+	}
+
+	// Check if already paused
+	paused, state, err := deacon.IsPaused(townRoot)
+	if err != nil {
+		return fmt.Errorf("checking pause state: %w", err)
+	}
+	if paused {
+		fmt.Printf("%s Deacon is already paused\n", style.Dim.Render("○"))
+		fmt.Printf("  Reason: %s\n", state.Reason)
+		fmt.Printf("  Paused at: %s\n", state.PausedAt.Format(time.RFC3339))
+		fmt.Printf("  Paused by: %s\n", state.PausedBy)
+		return nil
+	}
+
+	// Pause the Deacon
+	if err := deacon.Pause(townRoot, pauseReason, "human"); err != nil {
+		return fmt.Errorf("pausing Deacon: %w", err)
+	}
+
+	fmt.Printf("%s Deacon paused\n", style.Bold.Render("⏸️"))
+	if pauseReason != "" {
+		fmt.Printf("  Reason: %s\n", pauseReason)
+	}
+	fmt.Printf("  Pause file: %s\n", deacon.GetPauseFile(townRoot))
+	fmt.Println()
+	fmt.Printf("The Deacon will not perform any patrol actions until resumed.\n")
+	fmt.Printf("Resume with: %s\n", style.Dim.Render("gt deacon resume"))
+
+	return nil
+}
+
+// runDeaconResume resumes the Deacon to allow patrol actions.
+func runDeaconResume(cmd *cobra.Command, args []string) error {
+	townRoot, err := workspace.FindFromCwdOrError()
+	if err != nil {
+		return fmt.Errorf("not in a Gas Town workspace: %w", err)
+	}
+
+	// Check if paused
+	paused, _, err := deacon.IsPaused(townRoot)
+	if err != nil {
+		return fmt.Errorf("checking pause state: %w", err)
+	}
+	if !paused {
+		fmt.Printf("%s Deacon is not paused\n", style.Dim.Render("○"))
+		return nil
+	}
+
+	// Resume the Deacon
+	if err := deacon.Resume(townRoot); err != nil {
+		return fmt.Errorf("resuming Deacon: %w", err)
+	}
+
+	fmt.Printf("%s Deacon resumed\n", style.Bold.Render("▶️"))
+	fmt.Println("The Deacon can now perform patrol actions.")
 
 	return nil
 }
