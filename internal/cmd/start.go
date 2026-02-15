@@ -17,6 +17,7 @@ import (
 	"github.com/steveyegge/gastown/internal/crew"
 	"github.com/steveyegge/gastown/internal/daemon"
 	"github.com/steveyegge/gastown/internal/deacon"
+	"github.com/steveyegge/gastown/internal/doltserver"
 	"github.com/steveyegge/gastown/internal/git"
 	"github.com/steveyegge/gastown/internal/mayor"
 	"github.com/steveyegge/gastown/internal/polecat"
@@ -209,6 +210,36 @@ func runStart(cmd *cobra.Command, args []string) error {
 	var wg sync.WaitGroup
 	var mu sync.Mutex // Protects stdout
 	var coreErr error
+	var doltOK bool
+
+	// Ensure Dolt server is running (prerequisite for beads)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		cfg := doltserver.DefaultConfig(townRoot)
+		if _, err := os.Stat(cfg.DataDir); os.IsNotExist(err) {
+			// No Dolt data dir — nothing to start
+			return
+		}
+		running, _, _ := doltserver.IsRunning(townRoot)
+		if running {
+			doltOK = true
+			mu.Lock()
+			fmt.Printf("  %s Dolt server already running\n", style.Dim.Render("○"))
+			mu.Unlock()
+			return
+		}
+		if err := doltserver.Start(townRoot); err != nil {
+			mu.Lock()
+			fmt.Printf("  %s Dolt server failed: %v\n", style.Dim.Render("○"), err)
+			mu.Unlock()
+		} else {
+			doltOK = true
+			mu.Lock()
+			fmt.Printf("  %s Dolt server started (port %d)\n", style.Bold.Render("✓"), doltserver.DefaultPort)
+			mu.Unlock()
+		}
+	}()
 
 	// Start core agents (Mayor and Deacon) in background
 	wg.Add(1)
@@ -240,6 +271,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	wg.Wait()
+
+	// Ensure beads metadata points to the Dolt server
+	if doltOK {
+		_, _ = doltserver.EnsureAllMetadata(townRoot)
+	}
 
 	if coreErr != nil {
 		return coreErr
