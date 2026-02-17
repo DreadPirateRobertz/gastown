@@ -247,9 +247,16 @@ func detectSessionState(ctx RoleContext) SessionState {
 			agentBeadDir := beads.ResolveHookDir(ctx.TownRoot, agentBeadID, ctx.WorkDir)
 			ab := beads.New(agentBeadDir)
 			if agentBead, err := ab.Show(agentBeadID); err == nil && agentBead != nil && agentBead.HookBead != "" {
-				state.State = "autonomous"
-				state.HookedBead = agentBead.HookBead
-				return state
+				// Resolve and verify the target bead exists with active status
+				// (mirrors molecule_status.go and signal_stop.go patterns)
+				hookBeadDir := beads.ResolveHookDir(ctx.TownRoot, agentBead.HookBead, ctx.WorkDir)
+				hb := beads.New(hookBeadDir)
+				if hookBead, err := hb.Show(agentBead.HookBead); err == nil && hookBead != nil &&
+					(hookBead.Status == beads.StatusHooked || hookBead.Status == "in_progress") {
+					state.State = "autonomous"
+					state.HookedBead = agentBead.HookBead
+					return state
+				}
 			}
 		}
 
