@@ -11,7 +11,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -42,6 +44,24 @@ func isClaimStale(updatedAt string, timeout time.Duration) (stale bool, parseErr
 		return false, err // Caller should log the parse error
 	}
 	return time.Since(t) >= timeout, nil
+}
+
+// GateConfig defines a single quality gate command.
+type GateConfig struct {
+	// Cmd is the shell command to execute.
+	Cmd string `json:"cmd"`
+
+	// Timeout is the maximum time the gate command may run.
+	// Zero means no timeout (inherits context deadline).
+	Timeout time.Duration `json:"timeout"`
+}
+
+// GateResult holds the outcome of a single gate execution.
+type GateResult struct {
+	Name    string
+	Success bool
+	Error   string
+	Elapsed time.Duration
 }
 
 // MergeQueueConfig holds configuration for the merge queue processor.
@@ -82,6 +102,15 @@ type MergeQueueConfig struct {
 	// NOTE: Only one refinery instance runs per rig (enforced by ErrAlreadyRunning
 	// in manager.go), so concurrent re-claim is not a concern in practice.
 	StaleClaimTimeout time.Duration `json:"stale_claim_timeout"`
+
+	// Gates defines named quality gate commands to run before merging.
+	// When non-empty, gates replace the legacy RunTests/TestCommand path.
+	// Each gate runs as a shell command with an optional per-gate timeout.
+	Gates map[string]*GateConfig `json:"gates"`
+
+	// GatesParallel controls whether gates run concurrently.
+	// When true, all gates start simultaneously; any failure = overall failure.
+	GatesParallel bool `json:"gates_parallel"`
 }
 
 // DefaultMergeQueueConfig returns sensible defaults for merge queue configuration.
@@ -237,15 +266,17 @@ func (e *Engineer) LoadConfig() error {
 	// Parse merge_queue section into our config struct
 	// We need special handling for poll_interval (string -> Duration)
 	var mqRaw struct {
-		Enabled              *bool   `json:"enabled"`
-		OnConflict           *string `json:"on_conflict"`
-		RunTests             *bool   `json:"run_tests"`
-		TestCommand          *string `json:"test_command"`
-		DeleteMergedBranches *bool   `json:"delete_merged_branches"`
-		RetryFlakyTests      *int    `json:"retry_flaky_tests"`
-		PollInterval         *string `json:"poll_interval"`
-		MaxConcurrent        *int    `json:"max_concurrent"`
-		StaleClaimTimeout    *string `json:"stale_claim_timeout"`
+		Enabled              *bool                      `json:"enabled"`
+		OnConflict           *string                    `json:"on_conflict"`
+		RunTests             *bool                      `json:"run_tests"`
+		TestCommand          *string                    `json:"test_command"`
+		DeleteMergedBranches *bool                      `json:"delete_merged_branches"`
+		RetryFlakyTests      *int                       `json:"retry_flaky_tests"`
+		PollInterval         *string                    `json:"poll_interval"`
+		MaxConcurrent        *int                       `json:"max_concurrent"`
+		StaleClaimTimeout    *string                    `json:"stale_claim_timeout"`
+		Gates                map[string]*gateConfigRaw  `json:"gates"`
+		GatesParallel        *bool                      `json:"gates_parallel"`
 	}
 
 	if err := json.Unmarshal(rawConfig.MergeQueue, &mqRaw); err != nil {
@@ -292,7 +323,36 @@ func (e *Engineer) LoadConfig() error {
 		e.config.StaleClaimTimeout = dur
 	}
 
+	// Parse gates configuration
+	if mqRaw.Gates != nil {
+		e.config.Gates = make(map[string]*GateConfig, len(mqRaw.Gates))
+		for name, raw := range mqRaw.Gates {
+			gc := &GateConfig{Cmd: raw.Cmd}
+			if raw.Timeout != "" {
+				dur, err := time.ParseDuration(raw.Timeout)
+				if err != nil {
+					return fmt.Errorf("invalid timeout for gate %q: %w", name, err)
+				}
+				if dur <= 0 {
+					return fmt.Errorf("gate %q timeout must be positive, got %v", name, dur)
+				}
+				gc.Timeout = dur
+			}
+			e.config.Gates[name] = gc
+		}
+	}
+	if mqRaw.GatesParallel != nil {
+		e.config.GatesParallel = *mqRaw.GatesParallel
+	}
+
 	return nil
+}
+
+// gateConfigRaw is the JSON-friendly representation of a gate config
+// with timeout as a string duration.
+type gateConfigRaw struct {
+	Cmd     string `json:"cmd"`
+	Timeout string `json:"timeout"`
 }
 
 // Config returns the current merge queue configuration.
@@ -391,8 +451,15 @@ func (e *Engineer) doMerge(ctx context.Context, branch, target, sourceIssue stri
 		_, _ = fmt.Fprintf(e.output, "[Engineer] Pushed %d submodule(s)\n", len(subChanges))
 	}
 
-	// Step 4: Run tests if configured
-	if e.config.RunTests && e.config.TestCommand != "" {
+	// Step 4: Run quality gates (or legacy tests) if configured
+	if len(e.config.Gates) > 0 {
+		// New gates system: run configured quality gates
+		gateResult := e.runGates(ctx)
+		if !gateResult.Success {
+			return gateResult
+		}
+	} else if e.config.RunTests && e.config.TestCommand != "" {
+		// Legacy test command path (backward compatible)
 		_, _ = fmt.Fprintf(e.output, "[Engineer] Running tests: %s\n", e.config.TestCommand)
 		result := e.runTests(ctx)
 		if !result.Success {
@@ -612,6 +679,131 @@ func (e *Engineer) runTests(ctx context.Context) ProcessResult {
 		TestsFailed: true,
 		Error:       fmt.Sprintf("tests failed after %d attempts: %v", maxRetries, lastErr),
 	}
+}
+
+// runGate executes a single quality gate command and returns the result.
+func (e *Engineer) runGate(ctx context.Context, name string, gate *GateConfig) GateResult {
+	start := time.Now()
+
+	if strings.TrimSpace(gate.Cmd) == "" {
+		return GateResult{
+			Name:    name,
+			Success: false,
+			Error:   "gate command is empty",
+			Elapsed: time.Since(start),
+		}
+	}
+
+	// Apply per-gate timeout if configured
+	gateCtx := ctx
+	if gate.Timeout > 0 {
+		var cancel context.CancelFunc
+		gateCtx, cancel = context.WithTimeout(ctx, gate.Timeout)
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(gateCtx, "sh", "-c", gate.Cmd) //nolint:gosec // G204: Gate commands are from trusted rig config
+	cmd.Dir = e.workDir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	elapsed := time.Since(start)
+
+	if err == nil {
+		return GateResult{
+			Name:    name,
+			Success: true,
+			Elapsed: elapsed,
+		}
+	}
+
+	errMsg := fmt.Sprintf("%v", err)
+	if gateCtx.Err() == context.DeadlineExceeded {
+		errMsg = fmt.Sprintf("timed out after %v", gate.Timeout)
+	}
+	if stderrStr := strings.TrimSpace(stderr.String()); stderrStr != "" {
+		// Cap stderr to avoid huge error messages
+		if len(stderrStr) > 500 {
+			stderrStr = stderrStr[:500] + "..."
+		}
+		errMsg = fmt.Sprintf("%s: %s", errMsg, stderrStr)
+	}
+
+	return GateResult{
+		Name:    name,
+		Success: false,
+		Error:   errMsg,
+		Elapsed: elapsed,
+	}
+}
+
+// runGates executes all configured quality gates and returns a ProcessResult.
+// Gates run in parallel if GatesParallel is true; otherwise sequentially.
+// Any single gate failure means overall failure.
+func (e *Engineer) runGates(ctx context.Context) ProcessResult {
+	gates := e.config.Gates
+	if len(gates) == 0 {
+		return ProcessResult{Success: true}
+	}
+
+	// Sort gate names for deterministic ordering
+	names := make([]string, 0, len(gates))
+	for name := range gates {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	_, _ = fmt.Fprintf(e.output, "[Engineer] Running %d quality gate(s) (parallel=%v)\n", len(names), e.config.GatesParallel)
+
+	var results []GateResult
+
+	if e.config.GatesParallel {
+		results = make([]GateResult, len(names))
+		var wg sync.WaitGroup
+		for i, name := range names {
+			wg.Add(1)
+			go func(idx int, gateName string) {
+				defer wg.Done()
+				_, _ = fmt.Fprintf(e.output, "[Engineer] Gate %q: starting (%s)\n", gateName, gates[gateName].Cmd)
+				results[idx] = e.runGate(ctx, gateName, gates[gateName])
+			}(i, name)
+		}
+		wg.Wait()
+	} else {
+		for _, name := range names {
+			_, _ = fmt.Fprintf(e.output, "[Engineer] Gate %q: starting (%s)\n", name, gates[name].Cmd)
+			result := e.runGate(ctx, name, gates[name])
+			results = append(results, result)
+			if !result.Success {
+				// Sequential mode: stop on first failure
+				break
+			}
+		}
+	}
+
+	// Report results
+	var failures []string
+	for _, r := range results {
+		if r.Success {
+			_, _ = fmt.Fprintf(e.output, "[Engineer] Gate %q: passed (%v)\n", r.Name, r.Elapsed.Truncate(time.Millisecond))
+		} else {
+			_, _ = fmt.Fprintf(e.output, "[Engineer] Gate %q: FAILED (%v) - %s\n", r.Name, r.Elapsed.Truncate(time.Millisecond), r.Error)
+			failures = append(failures, fmt.Sprintf("%s: %s", r.Name, r.Error))
+		}
+	}
+
+	if len(failures) > 0 {
+		return ProcessResult{
+			Success:     false,
+			TestsFailed: true,
+			Error:       fmt.Sprintf("quality gates failed: %s", strings.Join(failures, "; ")),
+		}
+	}
+
+	_, _ = fmt.Fprintln(e.output, "[Engineer] All quality gates passed")
+	return ProcessResult{Success: true}
 }
 
 // syncCrewWorkspaces pulls latest changes to all crew workspaces.

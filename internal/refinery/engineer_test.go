@@ -1,9 +1,13 @@
 package refinery
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -249,6 +253,277 @@ func TestNewEngineer(t *testing.T) {
 	}
 	if e.config == nil {
 		t.Error("expected config to be initialized with defaults")
+	}
+}
+
+func TestEngineer_LoadConfig_WithGates(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "engineer-gates-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	config := map[string]interface{}{
+		"merge_queue": map[string]interface{}{
+			"gates": map[string]interface{}{
+				"test": map[string]interface{}{
+					"cmd":     "go test ./...",
+					"timeout": "5m",
+				},
+				"lint": map[string]interface{}{
+					"cmd":     "golangci-lint run",
+					"timeout": "2m",
+				},
+				"build": map[string]interface{}{
+					"cmd": "go build ./...",
+				},
+			},
+			"gates_parallel": true,
+		},
+	}
+
+	data, _ := json.MarshalIndent(config, "", "  ")
+	if err := os.WriteFile(filepath.Join(tmpDir, "config.json"), data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := &rig.Rig{Name: "test-rig", Path: tmpDir}
+	e := NewEngineer(r)
+
+	if err := e.LoadConfig(); err != nil {
+		t.Fatalf("unexpected error loading config: %v", err)
+	}
+
+	if len(e.config.Gates) != 3 {
+		t.Fatalf("expected 3 gates, got %d", len(e.config.Gates))
+	}
+	if e.config.Gates["test"].Cmd != "go test ./..." {
+		t.Errorf("expected test gate cmd 'go test ./...', got %q", e.config.Gates["test"].Cmd)
+	}
+	if e.config.Gates["test"].Timeout != 5*time.Minute {
+		t.Errorf("expected test gate timeout 5m, got %v", e.config.Gates["test"].Timeout)
+	}
+	if e.config.Gates["lint"].Timeout != 2*time.Minute {
+		t.Errorf("expected lint gate timeout 2m, got %v", e.config.Gates["lint"].Timeout)
+	}
+	if e.config.Gates["build"].Timeout != 0 {
+		t.Errorf("expected build gate timeout 0 (no timeout), got %v", e.config.Gates["build"].Timeout)
+	}
+	if !e.config.GatesParallel {
+		t.Error("expected gates_parallel to be true")
+	}
+}
+
+func TestEngineer_LoadConfig_GateInvalidTimeout(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "engineer-gates-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tests := []struct {
+		name    string
+		timeout string
+	}{
+		{"not a duration", "not-a-duration"},
+		{"negative", "-5m"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := map[string]interface{}{
+				"merge_queue": map[string]interface{}{
+					"gates": map[string]interface{}{
+						"bad": map[string]interface{}{
+							"cmd":     "echo test",
+							"timeout": tt.timeout,
+						},
+					},
+				},
+			}
+
+			data, _ := json.MarshalIndent(config, "", "  ")
+			if err := os.WriteFile(filepath.Join(tmpDir, "config.json"), data, 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			r := &rig.Rig{Name: "test-rig", Path: tmpDir}
+			e := NewEngineer(r)
+
+			err := e.LoadConfig()
+			if err == nil {
+				t.Errorf("expected error for gate timeout %q", tt.timeout)
+			}
+		})
+	}
+}
+
+func TestRunGate_Success(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+
+	result := e.runGate(context.Background(), "echo-test", &GateConfig{
+		Cmd: "echo hello",
+	})
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+	if result.Name != "echo-test" {
+		t.Errorf("expected name 'echo-test', got %q", result.Name)
+	}
+}
+
+func TestRunGate_Failure(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+
+	result := e.runGate(context.Background(), "fail-test", &GateConfig{
+		Cmd: "exit 1",
+	})
+
+	if result.Success {
+		t.Error("expected failure")
+	}
+	if result.Name != "fail-test" {
+		t.Errorf("expected name 'fail-test', got %q", result.Name)
+	}
+}
+
+func TestRunGate_EmptyCmd(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+
+	result := e.runGate(context.Background(), "empty", &GateConfig{
+		Cmd: "",
+	})
+
+	if result.Success {
+		t.Error("expected failure for empty cmd")
+	}
+}
+
+func TestRunGate_Timeout(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+
+	result := e.runGate(context.Background(), "slow", &GateConfig{
+		Cmd:     "sleep 10",
+		Timeout: 100 * time.Millisecond,
+	})
+
+	if result.Success {
+		t.Error("expected timeout failure")
+	}
+	if !strings.Contains(result.Error, "timed out") {
+		t.Errorf("expected timeout error, got: %s", result.Error)
+	}
+}
+
+func TestRunGates_Sequential_AllPass(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+	e.output = io.Discard
+	e.config.Gates = map[string]*GateConfig{
+		"a": {Cmd: "true"},
+		"b": {Cmd: "true"},
+		"c": {Cmd: "true"},
+	}
+	e.config.GatesParallel = false
+
+	result := e.runGates(context.Background())
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+}
+
+func TestRunGates_Sequential_StopsOnFirstFailure(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+	e.output = io.Discard
+
+	// Create a marker file to track which gates ran
+	markerDir := t.TempDir()
+	e.config.Gates = map[string]*GateConfig{
+		"a_pass": {Cmd: fmt.Sprintf("touch %s/a", markerDir)},
+		"b_fail": {Cmd: "exit 1"},
+		"c_skip": {Cmd: fmt.Sprintf("touch %s/c", markerDir)},
+	}
+	e.config.GatesParallel = false
+
+	result := e.runGates(context.Background())
+	if result.Success {
+		t.Error("expected failure")
+	}
+
+	// Gate "a_pass" should have run
+	if _, err := os.Stat(filepath.Join(markerDir, "a")); os.IsNotExist(err) {
+		t.Error("gate 'a_pass' should have run")
+	}
+	// Gate "c_skip" should NOT have run (stopped after b_fail)
+	if _, err := os.Stat(filepath.Join(markerDir, "c")); !os.IsNotExist(err) {
+		t.Error("gate 'c_skip' should not have run after failure")
+	}
+}
+
+func TestRunGates_Parallel_AllPass(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+	e.output = io.Discard
+	e.config.Gates = map[string]*GateConfig{
+		"a": {Cmd: "true"},
+		"b": {Cmd: "true"},
+		"c": {Cmd: "true"},
+	}
+	e.config.GatesParallel = true
+
+	result := e.runGates(context.Background())
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+}
+
+func TestRunGates_Parallel_AnyFailure(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+	e.output = io.Discard
+	e.config.Gates = map[string]*GateConfig{
+		"pass1": {Cmd: "true"},
+		"fail1": {Cmd: "exit 1"},
+		"pass2": {Cmd: "true"},
+	}
+	e.config.GatesParallel = true
+
+	result := e.runGates(context.Background())
+	if result.Success {
+		t.Error("expected failure when any gate fails")
+	}
+	if !result.TestsFailed {
+		t.Error("expected TestsFailed to be true")
+	}
+	if !strings.Contains(result.Error, "fail1") {
+		t.Errorf("expected error to mention 'fail1', got: %s", result.Error)
+	}
+}
+
+func TestRunGates_Empty(t *testing.T) {
+	r := &rig.Rig{Name: "test-rig", Path: t.TempDir()}
+	e := NewEngineer(r)
+	e.workDir = t.TempDir()
+	e.output = io.Discard
+	e.config.Gates = nil
+
+	result := e.runGates(context.Background())
+	if !result.Success {
+		t.Error("expected success with no gates configured")
 	}
 }
 
