@@ -115,9 +115,17 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 	defer func() {
 		if sessionCleanupNeeded && !sessionKilled {
 			fmt.Printf("%s Deferred session cleanup (backstop)\n", style.Bold.Render("→"))
+			// Log real errors before session kill — selfKillSession terminates the
+			// tmux session (and this process's PTY), so any logging after it is
+			// unreachable. This makes errors visible in the agent's output (gt-cof fix).
+			if _, silent := IsSilentExit(retErr); retErr != nil && !silent {
+				fmt.Fprintf(os.Stderr, "Error during gt done (session will be cleaned up): %v\n", retErr)
+			}
 			if err := selfKillSession(deferredTownRoot, deferredRoleInfo); err != nil {
 				style.PrintWarning("deferred session kill failed: %v", err)
 			}
+			// Only suppress with SilentExit(0) when retErr is nil (normal completion).
+			// Preserve real errors so the cobra error handler can report non-zero exit.
 			if retErr == nil {
 				retErr = NewSilentExit(0)
 			}
@@ -761,18 +769,37 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 			description += "\nconflict_task_id: null"
 
 			// Create MR bead (ephemeral wisp - will be cleaned up after merge)
-			mrIssue, err := bd.Create(beads.CreateOptions{
-				Title:       title,
-				Type:        "merge-request",
-				Priority:    priority,
-				Description: description,
-				Ephemeral:   true,
-			})
-			if err != nil {
-				// Non-fatal: record the error and skip to notifyWitness.
+			// Retry with backoff: transient Dolt lock contention or connection
+			// failures can cause a single attempt to fail. Without retry, MR
+			// creation silently fails, stranding the pushed branch (gt-cof).
+			var mrIssue *beads.Issue
+			var mrCreateErr error
+			for mrAttempt := 1; mrAttempt <= 3; mrAttempt++ {
+				mrIssue, mrCreateErr = bd.Create(beads.CreateOptions{
+					Title:       title,
+					Type:        "merge-request",
+					Priority:    priority,
+					Description: description,
+					Ephemeral:   true,
+				})
+				if mrCreateErr == nil {
+					break
+				}
+				if mrAttempt < 3 {
+					style.PrintWarning("MR bead creation attempt %d/3 failed: %v (retrying in %ds)", mrAttempt, mrCreateErr, mrAttempt*2)
+					time.Sleep(time.Duration(mrAttempt*2) * time.Second)
+				}
+			}
+			if mrCreateErr != nil {
+				// All retries failed. Record error and skip to notifyWitness.
 				// Push succeeded so branch is on remote, but MR bead failed.
-				errMsg := fmt.Sprintf("MR bead creation failed: %v", err)
+				// pushFailed is set so worktree is preserved for recovery (gt-cof).
+				errMsg := fmt.Sprintf("MR bead creation failed after 3 attempts: %v", mrCreateErr)
 				doneErrors = append(doneErrors, errMsg)
+				// NOTE: pushFailed is reused here to mean "preserve worktree" — push
+				// actually succeeded, but the MR bead is missing so recovery needs
+				// the worktree intact. The nuke guard at self-clean checks pushFailed.
+				pushFailed = true
 				style.PrintWarning("%s\nBranch is pushed but MR bead not created. Witness will be notified.", errMsg)
 				goto notifyWitness
 			}
@@ -944,11 +971,13 @@ afterDoltMerge:
 	if roleInfo, err := GetRoleWithContext(cwd, townRoot); err == nil && roleInfo.Role == RolePolecat {
 		selfCleanAttempted = true
 
-		// Step 1: Nuke the worktree (only for COMPLETED with successful push)
+		// Step 1: Nuke the worktree (only for COMPLETED with successful push+merge)
 		// If push failed, preserve the worktree so Witness/Refinery can still
 		// access the branch for recovery. selfNukePolecat also checks
 		// branch-on-remote, so this is defense-in-depth.
-		if exitType == ExitCompleted && !pushFailed {
+		// If Dolt merge failed and we have an MR, the MR bead is stranded on
+		// the polecat's Dolt branch — preserve worktree for recovery (gt-cof).
+		if exitType == ExitCompleted && !pushFailed && !(mergeFailed && mrID != "") {
 			if err := selfNukePolecat(roleInfo, townRoot); err != nil {
 				// Non-fatal: Witness will clean up if we fail
 				style.PrintWarning("worktree nuke failed: %v (Witness will clean up)", err)
