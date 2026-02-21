@@ -1491,6 +1491,9 @@ func addressToAgentBeadID(address string) string {
 	case strings.HasPrefix(target, "crew/"):
 		crewName := strings.TrimPrefix(target, "crew/")
 		return session.CrewSessionName(rigPrefix, crewName)
+	case strings.HasPrefix(target, "polecats/"):
+		pcName := strings.TrimPrefix(target, "polecats/")
+		return session.PolecatSessionName(rigPrefix, pcName)
 	default:
 		return session.PolecatSessionName(rigPrefix, target)
 	}

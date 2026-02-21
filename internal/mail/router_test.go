@@ -1129,6 +1129,11 @@ func TestAddressToAgentBeadID(t *testing.T) {
 			expected: "gt-alpha",
 		},
 		{
+			name:     "explicit polecat with polecats/ prefix",
+			address:  "gastown/polecats/alpha",
+			expected: "gt-alpha",
+		},
+		{
 			name:     "empty address",
 			address:  "",
 			expected: "",
