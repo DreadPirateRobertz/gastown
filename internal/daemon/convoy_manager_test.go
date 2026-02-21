@@ -148,8 +148,8 @@ func TestEventPoll_DetectsCloseEvents(t *testing.T) {
 	}
 
 	m := NewConvoyManager(townRoot, logger, "gt", 10*time.Minute, map[string]beadsdk.Storage{"hq": store}, nil, nil)
-	m.seeded = true
-	m.pollAllStores()
+	m.seeded.Store(true)
+	m.pollStoresSnapshot(m.stores)
 
 	// Should have logged the close detection
 	found := false
@@ -194,7 +194,7 @@ func TestEventPoll_SkipsNonCloseEvents(t *testing.T) {
 	}
 
 	m := NewConvoyManager(townRoot, logger, "gt", 10*time.Minute, map[string]beadsdk.Storage{"hq": store}, nil, nil)
-	m.pollAllStores()
+	m.pollStoresSnapshot(m.stores)
 
 	// Should NOT have logged any close detection
 	for _, s := range logged {
@@ -943,7 +943,7 @@ func TestPollEvents_GetAllEventsSinceError(t *testing.T) {
 	m.cancel()
 
 	// pollEvents should not panic when store returns error
-	m.pollAllStores()
+	m.pollStoresSnapshot(m.stores)
 
 	// Verify the error was logged with retry message
 	found := false
@@ -1431,8 +1431,8 @@ func TestPollAllStores_MultiRig_DetectsCloseFromNonHqStore(t *testing.T) {
 	}
 
 	m := NewConvoyManager(t.TempDir(), logger, "gt", 10*time.Minute, stores, nil, nil)
-	m.seeded = true
-	m.pollAllStores()
+	m.seeded.Store(true)
+	m.pollStoresSnapshot(m.stores)
 
 	// The close event from the rig store should be detected
 	found := false
@@ -1494,8 +1494,8 @@ func TestPollAllStores_MultiRig_BothStoresPolled(t *testing.T) {
 	}
 
 	m := NewConvoyManager(t.TempDir(), logger, "gt", 10*time.Minute, stores, nil, nil)
-	m.seeded = true
-	m.pollAllStores()
+	m.seeded.Store(true)
+	m.pollStoresSnapshot(m.stores)
 
 	// Both close events should be detected
 	foundHq := false
@@ -1568,8 +1568,8 @@ func TestPollAllStores_SkipsParkedRigs(t *testing.T) {
 	}
 
 	m := NewConvoyManager(t.TempDir(), logger, "gt", 10*time.Minute, stores, nil, isParked)
-	m.seeded = true
-	m.pollAllStores()
+	m.seeded.Store(true)
+	m.pollStoresSnapshot(m.stores)
 
 	// Active rig's close event should be detected
 	foundActive := false
@@ -1621,8 +1621,8 @@ func TestPollAllStores_HqNeverSkippedEvenIfParkedCallbackReturnsTrue(t *testing.
 
 	m := NewConvoyManager(t.TempDir(), logger, "gt", 10*time.Minute,
 		map[string]beadsdk.Storage{"hq": store}, nil, alwaysParked)
-	m.seeded = true
-	m.pollAllStores()
+	m.seeded.Store(true)
+	m.pollStoresSnapshot(m.stores)
 
 	found := false
 	for _, s := range logged {
@@ -1667,8 +1667,8 @@ func TestPollAllStores_HighWaterMark_NoReprocessing(t *testing.T) {
 		map[string]beadsdk.Storage{"hq": store}, nil, nil)
 
 	// First poll: should detect the close
-	m.seeded = true
-	m.pollAllStores()
+	m.seeded.Store(true)
+	m.pollStoresSnapshot(m.stores)
 
 	closeCount := 0
 	for _, s := range logged {
@@ -1681,7 +1681,7 @@ func TestPollAllStores_HighWaterMark_NoReprocessing(t *testing.T) {
 	}
 
 	// Second poll: high-water mark should prevent reprocessing the same event
-	m.pollAllStores()
+	m.pollStoresSnapshot(m.stores)
 
 	closeCount = 0
 	for _, s := range logged {
@@ -1731,7 +1731,7 @@ func TestPollAllStores_PerStoreHighWaterMarks(t *testing.T) {
 	m := NewConvoyManager(t.TempDir(), logger, "gt", 10*time.Minute, stores, nil, nil)
 
 	// First poll: only hq has a close event
-	m.pollAllStores()
+	m.pollStoresSnapshot(m.stores)
 
 	// Now add a close event to gastown AFTER the first poll
 	rigIssue := &beadsdk.Issue{
@@ -1747,7 +1747,7 @@ func TestPollAllStores_PerStoreHighWaterMarks(t *testing.T) {
 
 	// Second poll: gastown's new event should be detected, hq's old event should NOT
 	logged = nil // reset
-	m.pollAllStores()
+	m.pollStoresSnapshot(m.stores)
 
 	foundNewRig := false
 	foundOldHq := false
@@ -1808,8 +1808,8 @@ exit 0
 	}
 
 	m := NewConvoyManager(townRoot, logger, filepath.Join(binDir, "gt"), 10*time.Minute, map[string]beadsdk.Storage{"hq": store}, nil, nil)
-	m.seeded = true
-	m.pollAllStores()
+	m.seeded.Store(true)
+	m.pollStoresSnapshot(m.stores)
 
 	for _, s := range logged {
 		if strings.Contains(s, "close detected") {
@@ -1864,8 +1864,8 @@ func TestPollStore_NilHqStore_LogsWarningAndSkips(t *testing.T) {
 	}
 
 	m := NewConvoyManager(t.TempDir(), logger, "gt", 10*time.Minute, stores, nil, nil)
-	m.seeded = true
-	m.pollAllStores()
+	m.seeded.Store(true)
+	m.pollStoresSnapshot(m.stores)
 
 	// Should log the nil hq warning
 	foundWarning := false
