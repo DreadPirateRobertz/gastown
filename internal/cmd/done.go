@@ -80,7 +80,7 @@ func init() {
 }
 
 func runDone(cmd *cobra.Command, args []string) (retErr error) {
-	defer func() { telemetry.RecordDone(context.Background(), doneStatus, retErr) }()
+	defer func() { telemetry.RecordDone(context.Background(), strings.ToUpper(doneStatus), retErr) }()
 	// Guard: Only polecats should call gt done
 	// Crew, deacons, witnesses etc. don't use gt done - they persist across tasks.
 	// Polecat sessions end with gt done — the session is cleaned up, but the

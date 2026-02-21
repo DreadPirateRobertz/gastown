@@ -168,8 +168,16 @@ func New(config *Config) (*Daemon, error) {
 			logger.Printf("Warning: failed to register daemon metrics: %v", err)
 			dm = nil
 		} else {
+			metricsURL := os.Getenv(telemetry.EnvMetricsURL)
+			if metricsURL == "" {
+				metricsURL = telemetry.DefaultMetricsURL
+			}
+			logsURL := os.Getenv(telemetry.EnvLogsURL)
+			if logsURL == "" {
+				logsURL = telemetry.DefaultLogsURL
+			}
 			logger.Printf("Telemetry active (metrics → %s, logs → %s)",
-				telemetry.DefaultMetricsURL, telemetry.DefaultLogsURL)
+				metricsURL, logsURL)
 		}
 	}
 

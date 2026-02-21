@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -158,11 +159,17 @@ const (
 )
 
 // truncateOutput trims s to max bytes and appends "…" when truncated.
+// Avoids splitting multi-byte UTF-8 characters at the boundary.
 func truncateOutput(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
-	return s[:max] + "…"
+	// Walk back from the cut point to avoid splitting a multi-byte rune.
+	truncated := s[:max]
+	for len(truncated) > 0 && !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+	return truncated + "…"
 }
 
 // RecordBDCall records a bd CLI invocation with duration (metrics + log event).

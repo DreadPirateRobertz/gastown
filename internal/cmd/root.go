@@ -236,7 +236,7 @@ func Execute() int {
 	}
 	if provider != nil {
 		defer func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			_ = provider.Shutdown(shutdownCtx)
 		}()
