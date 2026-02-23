@@ -93,6 +93,41 @@ func TestDogRoleBeadIDTown(t *testing.T) {
 	}
 }
 
+// TestAgentBeadIDWithPrefix tests agent bead ID generation, including dedup when prefix == rig.
+func TestAgentBeadIDWithPrefix(t *testing.T) {
+	tests := []struct {
+		name   string
+		prefix string
+		rig    string
+		role   string
+		wname  string
+		want   string
+	}{
+		// Normal cases (prefix != rig)
+		{"town-level mayor", "gt", "", "mayor", "", "gt-mayor"},
+		{"rig witness", "gt", "gastown", "witness", "", "gt-gastown-witness"},
+		{"rig polecat", "gt", "gastown", "polecat", "nux", "gt-gastown-polecat-nux"},
+		{"rig crew", "bd", "beads", "crew", "dave", "bd-beads-crew-dave"},
+
+		// Collapsed cases (prefix == rig) — should NOT stutter
+		{"dedup witness", "ff", "ff", "witness", "", "ff-witness"},
+		{"dedup refinery", "ff", "ff", "refinery", "", "ff-refinery"},
+		{"dedup polecat", "ff", "ff", "polecat", "nux", "ff-polecat-nux"},
+		{"dedup crew", "ff", "ff", "crew", "dave", "ff-crew-dave"},
+		{"dedup bd-beads", "bd", "bd", "witness", "", "bd-witness"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := AgentBeadIDWithPrefix(tt.prefix, tt.rig, tt.role, tt.wname)
+			if got != tt.want {
+				t.Errorf("AgentBeadIDWithPrefix(%q, %q, %q, %q) = %q, want %q",
+					tt.prefix, tt.rig, tt.role, tt.wname, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestValidateAgentID tests agent ID validation.
 func TestValidateAgentID(t *testing.T) {
 	tests := []struct {
@@ -144,9 +179,11 @@ func TestValidateAgentID(t *testing.T) {
 		{"mayor with rig suffix", "gt-gastown-mayor", true, "cannot have rig/name suffixes"},
 		{"deacon with rig suffix", "gt-beads-deacon", true, "cannot have rig/name suffixes"},
 
-		// Invalid: per-rig role without rig
-		{"witness alone", "gt-witness", true, "requires rig"},
-		{"refinery alone", "gt-refinery", true, "requires rig"},
+		// Collapsed form: rig-level role without rig (prefix == rig)
+		{"collapsed witness", "gt-witness", false, ""},
+		{"collapsed refinery", "gt-refinery", false, ""},
+		{"collapsed polecat", "ff-polecat-nux", false, ""},
+		{"collapsed crew", "ff-crew-dave", false, ""},
 
 		// Invalid: named agent without name
 		{"crew no name", "gt-beads-crew", true, "requires name"},

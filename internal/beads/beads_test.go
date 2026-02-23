@@ -1197,6 +1197,12 @@ func TestParseAgentBeadID(t *testing.T) {
 		{"gt-gastown-crew-polecat", "gastown", "crew", "polecat", true},
 		// Worker name collides with role keyword + hyphenated rig
 		{"gt-my-rig-polecat-witness", "my-rig", "polecat", "witness", true},
+		// Collapsed form: prefix == rig (e.g., rig "ff" with prefix "ff")
+		{"ff-witness", "ff", "witness", "", true},            // collapsed rig-level singleton
+		{"ff-refinery", "ff", "refinery", "", true},          // collapsed rig-level singleton
+		{"ff-polecat-nux", "ff", "polecat", "nux", true},    // collapsed named agent
+		{"ff-crew-dave", "ff", "crew", "dave", true},         // collapsed named agent
+		{"ff-polecat-war-boy", "ff", "polecat", "war-boy", true}, // collapsed named with hyphen
 		// Parseable but not valid agent roles (IsAgentSessionBead will reject)
 		{"gt-abc123", "", "abc123", "", true}, // Parses as town-level but not valid role
 		// Other prefixes (bd-, hq-)
