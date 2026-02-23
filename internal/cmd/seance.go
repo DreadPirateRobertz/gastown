@@ -215,12 +215,23 @@ func runSeanceTalk(sessionID, prompt string) error {
 	// Clean up any orphaned symlinks from previous interrupted sessions
 	cleanupOrphanedSessionSymlinks()
 
-	fmt.Printf("%s Summoning session %s...\n\n", style.Bold.Render("🔮"), sessionID)
-
-	// Find the session in another account and symlink it to the current account
-	// This allows the agent to load sessions from any account while keeping
-	// the forked session in the current account
+	// Find workspace root (needed for both prefix resolution and session symlinks)
 	townRoot, _ := workspace.FindFromCwd()
+
+	// Resolve prefix to full session ID if needed
+	if len(sessionID) < 36 {
+		sessionID = strings.TrimSuffix(sessionID, "…")
+		sessionID = strings.TrimSuffix(sessionID, "...")
+		if townRoot != "" {
+			resolved, err := resolveSessionPrefix(townRoot, sessionID)
+			if err != nil {
+				return fmt.Errorf("resolving session ID: %w", err)
+			}
+			sessionID = resolved
+		}
+	}
+
+	fmt.Printf("%s Summoning session %s...\n\n", style.Bold.Render("🔮"), sessionID)
 	cleanup, err := symlinkSessionToCurrentAccount(townRoot, sessionID)
 	if err != nil {
 		// Not fatal - session might already be in current account
@@ -306,6 +317,39 @@ func discoverSessions(townRoot string) ([]sessionEvent, error) {
 	})
 
 	return sessions, scanner.Err()
+}
+
+// resolveSessionPrefix resolves a truncated session ID prefix to the full UUID
+// by searching session_start events. Returns an error if zero or multiple matches.
+func resolveSessionPrefix(townRoot, prefix string) (string, error) {
+	sessions, err := discoverSessions(townRoot)
+	if err != nil {
+		return "", fmt.Errorf("searching sessions: %w", err)
+	}
+
+	var matches []string
+	seen := make(map[string]bool)
+	for _, s := range sessions {
+		id := getPayloadString(s.Payload, "session_id")
+		if strings.HasPrefix(id, prefix) && !seen[id] {
+			matches = append(matches, id)
+			seen[id] = true
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no session found matching prefix %q", prefix)
+	case 1:
+		return matches[0], nil
+	default:
+		display := matches
+		if len(display) > 3 {
+			display = display[:3]
+		}
+		return "", fmt.Errorf("ambiguous prefix %q matches %d sessions: %s",
+			prefix, len(matches), strings.Join(display, ", "))
+	}
 }
 
 func getPayloadString(payload map[string]interface{}, key string) string {

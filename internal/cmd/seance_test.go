@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/steveyegge/gastown/internal/config"
+	"github.com/steveyegge/gastown/internal/events"
 )
 
 // setupSeanceTestEnv creates a test environment with multiple accounts and sessions.
@@ -370,6 +373,104 @@ func TestCleanupOrphanedSessionSymlinks(t *testing.T) {
 		_ = json.Unmarshal(data, &updatedIndex)
 		if len(updatedIndex.Entries) != 1 {
 			t.Errorf("expected 1 entry preserved, got %d", len(updatedIndex.Entries))
+		}
+	})
+}
+
+// writeTestEvents writes session_start events to a .events.jsonl file for testing.
+func writeTestEvents(t *testing.T, townRoot string, sessionIDs []string) {
+	t.Helper()
+	eventsPath := filepath.Join(townRoot, events.EventsFile)
+	var lines []string
+	for i, id := range sessionIDs {
+		event := fmt.Sprintf(
+			`{"ts":"2026-01-22T%02d:00:00Z","type":"session_start","actor":"test/agent","payload":{"session_id":"%s","topic":"test"}}`,
+			i, id)
+		lines = append(lines, event)
+	}
+	if err := os.WriteFile(eventsPath, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+		t.Fatalf("write events file: %v", err)
+	}
+}
+
+func TestResolveSessionPrefix(t *testing.T) {
+	t.Run("resolves unique prefix", func(t *testing.T) {
+		townRoot := t.TempDir()
+		fullID := "46621448-3caa-4bbb-8ccc-123456789abc"
+		writeTestEvents(t, townRoot, []string{fullID})
+
+		resolved, err := resolveSessionPrefix(townRoot, "46621448-3c")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resolved != fullID {
+			t.Errorf("expected %s, got %s", fullID, resolved)
+		}
+	})
+
+	t.Run("resolves full ID as prefix of itself", func(t *testing.T) {
+		townRoot := t.TempDir()
+		fullID := "46621448-3caa-4bbb-8ccc-123456789abc"
+		writeTestEvents(t, townRoot, []string{fullID})
+
+		resolved, err := resolveSessionPrefix(townRoot, fullID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resolved != fullID {
+			t.Errorf("expected %s, got %s", fullID, resolved)
+		}
+	})
+
+	t.Run("returns error for ambiguous prefix", func(t *testing.T) {
+		townRoot := t.TempDir()
+		id1 := "abcdef00-1111-2222-3333-444444444444"
+		id2 := "abcdef00-5555-6666-7777-888888888888"
+		writeTestEvents(t, townRoot, []string{id1, id2})
+
+		_, err := resolveSessionPrefix(townRoot, "abcdef00")
+		if err == nil {
+			t.Fatal("expected error for ambiguous prefix")
+		}
+		if !strings.Contains(err.Error(), "ambiguous") {
+			t.Errorf("expected ambiguous error, got: %v", err)
+		}
+	})
+
+	t.Run("returns error for no match", func(t *testing.T) {
+		townRoot := t.TempDir()
+		writeTestEvents(t, townRoot, []string{"46621448-3caa-4bbb-8ccc-123456789abc"})
+
+		_, err := resolveSessionPrefix(townRoot, "ffffffff")
+		if err == nil {
+			t.Fatal("expected error for no match")
+		}
+		if !strings.Contains(err.Error(), "no session found") {
+			t.Errorf("expected 'no session found' error, got: %v", err)
+		}
+	})
+
+	t.Run("returns error for empty events", func(t *testing.T) {
+		townRoot := t.TempDir()
+
+		_, err := resolveSessionPrefix(townRoot, "anything")
+		if err == nil {
+			t.Fatal("expected error for no events file")
+		}
+	})
+
+	t.Run("deduplicates repeated session IDs", func(t *testing.T) {
+		townRoot := t.TempDir()
+		fullID := "46621448-3caa-4bbb-8ccc-123456789abc"
+		// Same session ID appears multiple times (e.g., agent restarted)
+		writeTestEvents(t, townRoot, []string{fullID, fullID, fullID})
+
+		resolved, err := resolveSessionPrefix(townRoot, "46621448")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resolved != fullID {
+			t.Errorf("expected %s, got %s", fullID, resolved)
 		}
 	})
 }
