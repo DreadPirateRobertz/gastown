@@ -54,7 +54,7 @@ Cleanup checks (fixable):
   - stale-beads-redirect     Detect stale files in .beads directories with redirects
 
 Clone divergence checks:
-  - persistent-role-branches Detect crew/witness/refinery not on main
+  - persistent-role-branches Detect witness/refinery not on main (excludes crew)
   - clone-divergence         Detect clones significantly behind origin/main
   - default-branch-all-rigs  Verify default_branch exists on remote for all rigs
   - worktree-gitdir-valid    Verify worktree .git files reference existing paths (fixable)

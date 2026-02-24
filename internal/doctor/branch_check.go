@@ -10,9 +10,9 @@ import (
 	"github.com/steveyegge/gastown/internal/rig"
 )
 
-// BranchCheck detects persistent roles (crew, witness, refinery) that are
-// not on the main branch. Long-lived roles should work directly on main
-// to avoid orphaned work and branch decay.
+// BranchCheck detects persistent infrastructure roles (witness, refinery)
+// that are not on the main branch. Crew members are excluded because they
+// legitimately use feature branches during PR workflows.
 type BranchCheck struct {
 	FixableCheck
 	offMainDirs []string // Cached during Run for use in Fix
@@ -24,7 +24,7 @@ func NewBranchCheck() *BranchCheck {
 		FixableCheck: FixableCheck{
 			BaseCheck: BaseCheck{
 				CheckName:        "persistent-role-branches",
-				CheckDescription: "Detect persistent roles not on main branch",
+				CheckDescription: "Detect infrastructure roles (witness/refinery) not on main branch",
 				CheckCategory:    CategoryCleanup,
 			},
 		},
@@ -163,10 +163,12 @@ func (c *BranchCheck) isExpectedBranch(townRoot, dir, branch string) bool {
 	return branch == cfg.DefaultBranch
 }
 
-// findPersistentRoleDirs finds all directories that should be on main:
-// - <rig>/crew/*
+// findPersistentRoleDirs finds infrastructure directories that should be on main:
 // - <rig>/witness/rig (if exists)
 // - <rig>/refinery/rig (if exists)
+//
+// Crew members are excluded because they legitimately use feature branches
+// during PR workflows (fix/, feat/, chore/ branches).
 func (c *BranchCheck) findPersistentRoleDirs(townRoot string) []string {
 	var dirs []string
 
@@ -191,16 +193,6 @@ func (c *BranchCheck) findPersistentRoleDirs(townRoot string) []string {
 		// Check if this looks like a rig (has crew/, polecats/, witness/, or refinery/)
 		if !c.isRig(rigPath) {
 			continue
-		}
-
-		// Add crew members
-		crewPath := filepath.Join(rigPath, "crew")
-		if crewEntries, err := os.ReadDir(crewPath); err == nil {
-			for _, crew := range crewEntries {
-				if crew.IsDir() && !strings.HasPrefix(crew.Name(), ".") {
-					dirs = append(dirs, filepath.Join(crewPath, crew.Name()))
-				}
-			}
 		}
 
 		// Add witness/rig if exists
