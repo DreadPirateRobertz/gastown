@@ -486,3 +486,100 @@ func TestEnvVarsCheck_BeadsDirWithOtherMismatches(t *testing.T) {
 		t.Errorf("Details should mention other issues")
 	}
 }
+
+// mockEnvAccessor extends mockEnvReader with SetEnvironment support for Fix() tests.
+type mockEnvAccessor struct {
+	mockEnvReader
+	setCalls map[string]map[string]string // session -> key -> value
+	setErr   error
+}
+
+func (m *mockEnvAccessor) SetEnvironment(sess, key, val string) error {
+	if m.setErr != nil {
+		return m.setErr
+	}
+	if m.setCalls == nil {
+		m.setCalls = make(map[string]map[string]string)
+	}
+	if m.setCalls[sess] == nil {
+		m.setCalls[sess] = make(map[string]string)
+	}
+	m.setCalls[sess][key] = val
+	return nil
+}
+
+func TestEnvVarsCheck_CanFix(t *testing.T) {
+	check := NewEnvVarsCheck()
+	if !check.CanFix() {
+		t.Error("CanFix() should return true after implementing Fix()")
+	}
+}
+
+func TestEnvVarsCheck_FixNoSessions(t *testing.T) {
+	mock := &mockEnvAccessor{
+		mockEnvReader: mockEnvReader{
+			listErr: errors.New("no tmux server"),
+		},
+	}
+	check := NewEnvVarsCheckWithAccessor(mock)
+
+	err := check.Fix(testCtx())
+	if err != nil {
+		t.Fatalf("Fix() should not error when no sessions: %v", err)
+	}
+	if len(mock.setCalls) != 0 {
+		t.Errorf("Fix() made unexpected SetEnvironment calls: %v", mock.setCalls)
+	}
+}
+
+func TestEnvVarsCheck_FixAppliesMissingVars(t *testing.T) {
+	mock := &mockEnvAccessor{
+		mockEnvReader: mockEnvReader{
+			sessions: []string{"hq-mayor"},
+			sessionEnvs: map[string]map[string]string{
+				"hq-mayor": {}, // All env vars missing
+			},
+		},
+	}
+	check := NewEnvVarsCheckWithAccessor(mock)
+
+	err := check.Fix(testCtx())
+	if err != nil {
+		t.Fatalf("Fix() returned error: %v", err)
+	}
+
+	expected := expectedEnv("mayor", "", "")
+	for key, wantVal := range expected {
+		sessionCalls, ok := mock.setCalls["hq-mayor"]
+		if !ok {
+			t.Fatalf("Fix() made no SetEnvironment calls for hq-mayor")
+		}
+		gotVal, found := sessionCalls[key]
+		if !found {
+			t.Errorf("Fix() did not call SetEnvironment for key %s", key)
+		} else if gotVal != wantVal {
+			t.Errorf("Fix() SetEnvironment(%s) = %q, want %q", key, gotVal, wantVal)
+		}
+	}
+}
+
+func TestEnvVarsCheck_FixSkipsCorrectVars(t *testing.T) {
+	expected := expectedEnv("mayor", "", "")
+	mock := &mockEnvAccessor{
+		mockEnvReader: mockEnvReader{
+			sessions: []string{"hq-mayor"},
+			sessionEnvs: map[string]map[string]string{
+				"hq-mayor": expected, // All vars already correct
+			},
+		},
+	}
+	check := NewEnvVarsCheckWithAccessor(mock)
+
+	err := check.Fix(testCtx())
+	if err != nil {
+		t.Fatalf("Fix() returned error: %v", err)
+	}
+	if len(mock.setCalls) != 0 {
+		t.Errorf("Fix() should not call SetEnvironment when vars are correct, got: %v", mock.setCalls)
+	}
+}
