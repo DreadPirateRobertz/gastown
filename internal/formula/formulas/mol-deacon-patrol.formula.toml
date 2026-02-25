@@ -654,9 +654,8 @@ gt dog add <name>
 **Step 3: Retire stale dogs (optional)**
 Dogs that have been idle for >24 hours can be removed to save resources:
 ```bash
-gt dog status <name>
-# Check last_active timestamp
-# If idle > 24h: gt dog remove <name>
+gt dogs list --json
+# Check last_active in each entry; if idle > 24h: gt dog remove <name>
 ```
 
 **Pool sizing guidelines:**
