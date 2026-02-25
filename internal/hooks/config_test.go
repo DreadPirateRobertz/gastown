@@ -607,6 +607,62 @@ func TestComputeExpectedNoBase(t *testing.T) {
 			t.Errorf("witness missing patrol-formula-guard matcher: %s", matcher)
 		}
 	}
+
+	// Deacon should get DefaultBase + built-in patrol-formula-guard (same as witness)
+	deacon, err := ComputeExpected("deacon")
+	if err != nil {
+		t.Fatalf("ComputeExpected(deacon) failed: %v", err)
+	}
+	if len(deacon.PreToolUse) < 4 {
+		t.Errorf("expected deacon to have at least 4 PreToolUse hooks from DefaultOverrides (patrol-formula-guard), got %d", len(deacon.PreToolUse))
+	}
+	if len(deacon.SessionStart) != len(defaultBase.SessionStart) {
+		t.Error("expected deacon to inherit SessionStart from DefaultBase")
+	}
+	deaconPatrolMatchers := map[string]bool{
+		"Bash(*bd mol pour*patrol*)":        false,
+		"Bash(*bd mol pour *mol-witness*)":  false,
+		"Bash(*bd mol pour *mol-deacon*)":   false,
+		"Bash(*bd mol pour *mol-refinery*)": false,
+	}
+	for _, entry := range deacon.PreToolUse {
+		if _, ok := deaconPatrolMatchers[entry.Matcher]; ok {
+			deaconPatrolMatchers[entry.Matcher] = true
+		}
+	}
+	for matcher, found := range deaconPatrolMatchers {
+		if !found {
+			t.Errorf("deacon missing patrol-formula-guard matcher: %s", matcher)
+		}
+	}
+
+	// Refinery should get DefaultBase + built-in patrol-formula-guard (same as witness)
+	refinery, err := ComputeExpected("refinery")
+	if err != nil {
+		t.Fatalf("ComputeExpected(refinery) failed: %v", err)
+	}
+	if len(refinery.PreToolUse) < 4 {
+		t.Errorf("expected refinery to have at least 4 PreToolUse hooks from DefaultOverrides (patrol-formula-guard), got %d", len(refinery.PreToolUse))
+	}
+	if len(refinery.SessionStart) != len(defaultBase.SessionStart) {
+		t.Error("expected refinery to inherit SessionStart from DefaultBase")
+	}
+	refineryPatrolMatchers := map[string]bool{
+		"Bash(*bd mol pour*patrol*)":        false,
+		"Bash(*bd mol pour *mol-witness*)":  false,
+		"Bash(*bd mol pour *mol-deacon*)":   false,
+		"Bash(*bd mol pour *mol-refinery*)": false,
+	}
+	for _, entry := range refinery.PreToolUse {
+		if _, ok := refineryPatrolMatchers[entry.Matcher]; ok {
+			refineryPatrolMatchers[entry.Matcher] = true
+		}
+	}
+	for matcher, found := range refineryPatrolMatchers {
+		if !found {
+			t.Errorf("refinery missing patrol-formula-guard matcher: %s", matcher)
+		}
+	}
 }
 
 // TestComputeExpectedWitnessRigSpecific verifies patrol-formula-guard propagates

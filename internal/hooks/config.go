@@ -229,6 +229,74 @@ func DefaultOverrides() map[string]*HooksConfig {
 				},
 			},
 		},
+		// Deacon roles: patrol-formula-guard (same as witness).
+		// Deacons also run patrols and must use wisps, not persistent molecules.
+		"deacon": {
+			PreToolUse: []HookEntry{
+				{
+					Matcher: "Bash(*bd mol pour*patrol*)",
+					Hooks: []Hook{{
+						Type:    "command",
+						Command: "echo '❌ BLOCKED: Patrol formulas must use wisps, not persistent molecules.' && echo 'Use: bd mol wisp mol-*-patrol' && echo 'Not:  bd mol pour mol-*-patrol' && exit 2",
+					}},
+				},
+				{
+					Matcher: "Bash(*bd mol pour *mol-witness*)",
+					Hooks: []Hook{{
+						Type:    "command",
+						Command: "echo '❌ BLOCKED: Patrol formulas must use wisps, not persistent molecules.' && echo 'Use: bd mol wisp mol-*-patrol' && echo 'Not:  bd mol pour mol-*-patrol' && exit 2",
+					}},
+				},
+				{
+					Matcher: "Bash(*bd mol pour *mol-deacon*)",
+					Hooks: []Hook{{
+						Type:    "command",
+						Command: "echo '❌ BLOCKED: Patrol formulas must use wisps, not persistent molecules.' && echo 'Use: bd mol wisp mol-*-patrol' && echo 'Not:  bd mol pour mol-*-patrol' && exit 2",
+					}},
+				},
+				{
+					Matcher: "Bash(*bd mol pour *mol-refinery*)",
+					Hooks: []Hook{{
+						Type:    "command",
+						Command: "echo '❌ BLOCKED: Patrol formulas must use wisps, not persistent molecules.' && echo 'Use: bd mol wisp mol-*-patrol' && echo 'Not:  bd mol pour mol-*-patrol' && exit 2",
+					}},
+				},
+			},
+		},
+		// Refinery roles: patrol-formula-guard (same as witness).
+		// Refineries also run patrols and must use wisps, not persistent molecules.
+		"refinery": {
+			PreToolUse: []HookEntry{
+				{
+					Matcher: "Bash(*bd mol pour*patrol*)",
+					Hooks: []Hook{{
+						Type:    "command",
+						Command: "echo '❌ BLOCKED: Patrol formulas must use wisps, not persistent molecules.' && echo 'Use: bd mol wisp mol-*-patrol' && echo 'Not:  bd mol pour mol-*-patrol' && exit 2",
+					}},
+				},
+				{
+					Matcher: "Bash(*bd mol pour *mol-witness*)",
+					Hooks: []Hook{{
+						Type:    "command",
+						Command: "echo '❌ BLOCKED: Patrol formulas must use wisps, not persistent molecules.' && echo 'Use: bd mol wisp mol-*-patrol' && echo 'Not:  bd mol pour mol-*-patrol' && exit 2",
+					}},
+				},
+				{
+					Matcher: "Bash(*bd mol pour *mol-deacon*)",
+					Hooks: []Hook{{
+						Type:    "command",
+						Command: "echo '❌ BLOCKED: Patrol formulas must use wisps, not persistent molecules.' && echo 'Use: bd mol wisp mol-*-patrol' && echo 'Not:  bd mol pour mol-*-patrol' && exit 2",
+					}},
+				},
+				{
+					Matcher: "Bash(*bd mol pour *mol-refinery*)",
+					Hooks: []Hook{{
+						Type:    "command",
+						Command: "echo '❌ BLOCKED: Patrol formulas must use wisps, not persistent molecules.' && echo 'Use: bd mol wisp mol-*-patrol' && echo 'Not:  bd mol pour mol-*-patrol' && exit 2",
+					}},
+				},
+			},
+		},
 	}
 }
 
