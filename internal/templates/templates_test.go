@@ -243,6 +243,82 @@ func TestRenderMessage_Nudge(t *testing.T) {
 	}
 }
 
+func TestRenderRole_Dog(t *testing.T) {
+	tmpl, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	data := RoleData{
+		Role:          "dog",
+		DogName:       "Fido",
+		TownRoot:      "/test/town",
+		TownName:      "town",
+		WorkDir:       "/test/town/deacon/dogs/Fido",
+		DefaultBranch: "main",
+		MayorSession:  "gt-town-mayor",
+		DeaconSession: "gt-town-deacon",
+	}
+
+	output, err := tmpl.RenderRole("dog", data)
+	if err != nil {
+		t.Fatalf("RenderRole() error = %v", err)
+	}
+
+	// Check for key content
+	if !strings.Contains(output, "Dog Context") {
+		t.Error("output missing 'Dog Context'")
+	}
+	if !strings.Contains(output, "Fido") {
+		t.Error("output missing dog name")
+	}
+	if !strings.Contains(output, "/test/town") {
+		t.Error("output missing town root")
+	}
+}
+
+// TestRenderRole_Dog_NoHardcodedGtPath verifies the dog template uses {{ .TownRoot }}
+// and does not contain hardcoded ~/gt paths.
+func TestRenderRole_Dog_NoHardcodedGtPath(t *testing.T) {
+	tmpl, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	const customTownRoot = "/custom/test/instance"
+
+	data := RoleData{
+		Role:          "dog",
+		DogName:       "Rover",
+		TownRoot:      customTownRoot,
+		TownName:      "instance",
+		WorkDir:       customTownRoot + "/deacon/dogs/Rover",
+		DefaultBranch: "main",
+		MayorSession:  "gt-instance-mayor",
+		DeaconSession: "gt-instance-deacon",
+	}
+
+	output, err := tmpl.RenderRole("dog", data)
+	if err != nil {
+		t.Fatalf("RenderRole() error = %v", err)
+	}
+
+	if strings.Contains(output, "~/gt") {
+		var offending []string
+		for i, line := range strings.Split(output, "\n") {
+			if strings.Contains(line, "~/gt") {
+				offending = append(offending, fmt.Sprintf("  line %d: %s", i+1, strings.TrimSpace(line)))
+			}
+		}
+		t.Errorf("rendered dog template still contains hardcoded ~/gt (TownRoot=%q):\n%s",
+			customTownRoot, strings.Join(offending, "\n"))
+	}
+
+	if !strings.Contains(output, customTownRoot) {
+		t.Errorf("rendered dog template does not contain TownRoot %q — paths may be hardcoded", customTownRoot)
+	}
+}
+
 func TestRoleNames(t *testing.T) {
 	tmpl, err := New()
 	if err != nil {

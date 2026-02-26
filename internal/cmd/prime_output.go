@@ -46,6 +46,8 @@ func outputPrimeContext(ctx RoleContext) (string, error) {
 		roleName = "crew"
 	case RoleBoot:
 		roleName = "boot"
+	case RoleDog:
+		roleName = "dog"
 	default:
 		// Unknown role - use fallback
 		outputPrimeContextFallback(ctx)
@@ -73,6 +75,7 @@ func outputPrimeContext(ctx RoleContext) (string, error) {
 		WorkDir:       ctx.WorkDir,
 		DefaultBranch: defaultBranch,
 		Polecat:       ctx.Polecat,
+		DogName:       ctx.Polecat, // ctx.Polecat holds the dog name for RoleDog
 		MayorSession:  session.MayorSessionName(),
 		DeaconSession: session.DeaconSessionName(),
 	}
