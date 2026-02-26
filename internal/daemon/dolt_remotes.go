@@ -103,6 +103,14 @@ func (d *Daemon) pushDoltRemotes() {
 
 // pushDatabase commits pending changes and pushes a single database to its remote.
 func (d *Daemon) pushDatabase(dataDir, db, remote, branch string) error {
+	// Safety: refuse to push anything that looks like a test database.
+	// This is the last line of defense against pushing pollution to GitHub.
+	for _, prefix := range []string{"test", "beads_t", "beads_pt", "doctest_"} {
+		if strings.HasPrefix(db, prefix) {
+			return fmt.Errorf("REFUSED: %q looks like a test database (prefix %q)", db, prefix)
+		}
+	}
+
 	// Step 1: Stage any unstaged changes (non-fatal)
 	addQuery := fmt.Sprintf("USE `%s`; CALL DOLT_ADD('-A')", db)
 	if err := d.runDoltSQL(dataDir, addQuery); err != nil {
