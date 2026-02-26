@@ -141,6 +141,9 @@ func TestBeadsDbInitAfterClone(t *testing.T) {
 			t.Fatalf("gt install failed: %v\nOutput: %s", err, output)
 		}
 
+		// Bridge test Dolt server PID so subsequent AddRig/IsRunning checks pass.
+		bridgeDoltPidToTown(t, townRoot)
+
 		// Create a repo with existing beads prefix "existing-prefix" AND issues
 		// directly at the expected rig location
 		rigDir := filepath.Join(townRoot, "myrig")
@@ -199,6 +202,9 @@ func TestBeadsDbInitAfterClone(t *testing.T) {
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("gt install failed: %v\nOutput: %s", err, output)
 		}
+
+		// Bridge test Dolt server PID so subsequent AddRig/IsRunning checks pass.
+		bridgeDoltPidToTown(t, townRoot)
 
 		// Create a tracked beads repo with NO issues at the expected rig location
 		rigDir := filepath.Join(townRoot, "emptyrig")
@@ -297,6 +303,9 @@ func TestBeadsDbInitAfterClone(t *testing.T) {
 			t.Fatalf("gt install failed: %v\nOutput: %s", err, output)
 		}
 
+		// Bridge test Dolt server PID so subsequent AddRig/IsRunning checks pass.
+		bridgeDoltPidToTown(t, townRoot)
+
 		// Create a tracked beads repo with NO issues at the expected rig location
 		rigDir := filepath.Join(townRoot, "testrig")
 		createTrackedBeadsRepoWithNoIssues(t, rigDir, "original-prefix")
@@ -348,6 +357,9 @@ func TestBeadsDbInitAfterClone(t *testing.T) {
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("gt install failed: %v\nOutput: %s", err, output)
 		}
+
+		// Bridge test Dolt server PID so subsequent AddRig/IsRunning checks pass.
+		bridgeDoltPidToTown(t, townRoot)
 
 		// Create a tracked beads repo with issues
 		rigDir := filepath.Join(townRoot, "reinitrig")
