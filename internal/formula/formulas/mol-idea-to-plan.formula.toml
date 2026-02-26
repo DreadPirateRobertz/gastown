@@ -1,20 +1,20 @@
 description = """
 Full pipeline from vague idea to approved, beads-ready implementation plan.
 
-Start by describing your idea conversationally to your crew worker (glacier).
+Start by describing your idea conversationally to your crew worker.
 They'll pour this formula and it takes over from there.
 
 ## Pipeline
 
 ```
-[You → Glacier]  Describe your idea (natural language, no structure needed)
+[You → Crew]     Describe your idea (natural language, no structure needed)
       ↓
-[intake]         Glacier structures it into a draft PRD
+[intake]         Agent structures it into a draft PRD
       ↓
 [prd-review]     6 polecats review PRD in parallel (mol-prd-review convoy)
                  → requirements, gaps, ambiguity, feasibility, scope, stakeholders
       ↓
-[human-clarify]  Glacier presents consolidated questions, you answer
+[human-clarify]  Agent presents consolidated questions, you answer
       ↓
 [generate-plan]  6 polecats design the implementation in parallel (design convoy)
                  → api, data, ux, scale, security, integration
@@ -24,7 +24,7 @@ They'll pour this formula and it takes over from there.
       ↓
 [human-approve]  You review the go/no-go verdict and greenlight
       ↓
-[create-beads]   Glacier converts the approved plan into beads with dependencies
+[create-beads]   Agent converts the approved plan into beads with dependencies
 ```
 
 ## Human Gates
@@ -37,7 +37,7 @@ These are the only steps requiring your input. Everything else runs autonomously
 
 ## Orchestration Model
 
-This is a workflow formula. The orchestrating agent (glacier) runs through
+This is a workflow formula. The orchestrating crew worker runs through
 steps sequentially. The parallel review steps kick off convoy sub-workflows
 (separate polecats for each review dimension) and await their synthesis reports
 via mail before proceeding.
@@ -65,7 +65,10 @@ Read the conversation context and produce a structured PRD draft.
 - `{{context}}` if provided
 
 **Your task:**
-Write a structured PRD draft to `.prd-reviews/{{problem|slug}}/prd-draft.md`
+Pick a short slug for this review (e.g., "notification-levels", "merge-queue-v2") and use it
+as `{{review_id}}` in all paths below. This ID is reused by downstream steps.
+
+Write a structured PRD draft to `.prd-reviews/{{review_id}}/prd-draft.md`
 
 Use this structure:
 ```markdown
@@ -99,7 +102,7 @@ A draft that exposes uncertainty is more useful than one that hides it.
 **After writing:**
 ```bash
 # Store the draft path for downstream steps
-echo "prd_draft=.prd-reviews/{{problem|slug}}/prd-draft.md" >> .prd-reviews/{{problem|slug}}/state.env
+echo "prd_draft=.prd-reviews/{{review_id}}/prd-draft.md" >> .prd-reviews/{{review_id}}/state.env
 ```
 
 **Exit criteria:** Draft PRD file exists. Rough but readable."""
@@ -115,7 +118,7 @@ Pour the mol-prd-review convoy to run 6 parallel PRD reviewers.
 ```bash
 gt formula run mol-prd-review \\
   --problem="{{problem}}" \\
-  --context="See .prd-reviews/{{problem|slug}}/prd-draft.md. {{context}}"
+  --context="See .prd-reviews/{{review_id}}/prd-draft.md. {{context}}"
 ```
 
 This spawns 6 polecats in parallel:
@@ -183,7 +186,7 @@ gt mail inbox
 ```
 
 **4. Incorporate answers:**
-Update the PRD draft at `.prd-reviews/{{problem|slug}}/prd-draft.md` with the
+Update the PRD draft at `.prd-reviews/{{review_id}}/prd-draft.md` with the
 human's answers. Add an "Answers and Clarifications" section at the bottom:
 
 ```markdown
@@ -207,7 +210,7 @@ Pour the design convoy to generate an implementation plan from the refined PRD.
 ```bash
 gt formula run design \\
   --problem="{{problem}}" \\
-  --context="PRD with clarifications: .prd-reviews/{{problem|slug}}/prd-draft.md. {{context}}"
+  --context="PRD with clarifications: .prd-reviews/{{review_id}}/prd-draft.md. {{context}}"
 ```
 
 This spawns 6 polecats in parallel, each exploring a different dimension:

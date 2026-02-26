@@ -39,11 +39,6 @@ description = "Additional context: existing code, constraints, prior decisions, 
 type = "string"
 required = false
 
-[inputs.depth]
-description = "Review depth: 'quick' (requirements + gaps + ambiguity), 'standard' (all 6 legs)"
-type = "string"
-default = "standard"
-
 [prompts]
 base = """
 # PRD Review Assignment
@@ -317,7 +312,7 @@ All leg analyses from: {{.output.directory}}/
 ## Next Steps
 - [ ] Human answers critical questions above
 - [ ] Updated PRD bead with answers
-- [ ] Pour `mol-plan-generate` to generate implementation plan
+- [ ] Pour `design` convoy to generate implementation plan
 ```
 
 **After writing the file, mail the human overseer:**
