@@ -124,7 +124,7 @@ func (d *Daemon) hasBackupRemote(dataDir, db, backupName string) bool {
 	defer cancel()
 
 	dbDir := dataDir + "/" + db
-	cmd := exec.CommandContext(ctx, "dolt", "backup", "ls")
+	cmd := exec.CommandContext(ctx, "dolt", "backup")
 	cmd.Dir = dbDir
 
 	output, err := cmd.Output()
