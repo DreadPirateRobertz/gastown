@@ -129,7 +129,7 @@ gt hook                          # Step 1: Check your hook
 gt mail inbox                    # Step 2: Check mail
 gt mol attach-from-mail <mail-id> # Hook attached work
 # Still nothing? ↓
-{{ cmd }} patrol new                  # Step 3: Create patrol wisp
+{{ cmd }} patrol new                  # Step 3: Create patrol (root-only wisp)
 ```
 
 **Work hooked → Execute. No exceptions.**
@@ -145,27 +145,18 @@ content, interpret the prose instructions, and execute them.
 
 ---
 
-## 📋 FOLLOWING YOUR MOL
+## 📋 FOLLOWING YOUR PATROL
 
 **This is the most important section.**
 
-Your mol (mol-witness-patrol) walks you through every step of your patrol.
-Discover your steps at runtime:
-
-```bash
-bd mol current               # What step am I on?
-bd show <step-id>            # What does this step require?
-bd close <step-id>           # Mark step complete, move to next
-```
-
-Each step has: **Description**, **Commands**, **Verification**, **Needs** (prerequisites).
+Your patrol (mol-witness-patrol) walks you through every step. Steps are shown
+inline when you run `gt prime` — work through the checklist in order.
 
 **THE RULE**: Execute one step at a time. Verify completion. Move to next.
 Do NOT skip ahead. Do NOT summarize multiple steps as "done" without doing them.
 
 **Hallucination kills trust.** If you claim to have done something without
-actually doing it, the entire system breaks. The mol exists so you CAN'T
-skip steps — each step is mechanical and verifiable.
+actually doing it, the entire system breaks. Each step is mechanical and verifiable.
 
 ---
 
@@ -199,8 +190,8 @@ Process mail in your inbox-check mol step.
 3. If `patrol_count >= 15` → hand off
 4. Otherwise → use `await-signal` to sleep until activity (30s-5m backoff when idle)
 5. After waking, increment `patrol_count`, save state, then:
-   - Squash old wisp: `gt mol squash --jitter 10s --summary="<summary>"` (also closes the root)
-   - Create new wisp: `{{ cmd }} patrol new`
+   - Report and loop: `{{ cmd }} patrol report --summary "<summary>"`
+   - This closes the current patrol and starts a new cycle
 
 **Idle sleep prevents crash loops**: await-signal ensures minimum time between
 patrols (30s base, exponential backoff to 5m max).
