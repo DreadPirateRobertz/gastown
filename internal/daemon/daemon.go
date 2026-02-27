@@ -75,6 +75,10 @@ type Daemon struct {
 	gtPath string
 	bdPath string
 
+	// Boot spawn cooldown: prevents Boot from spawning on every heartbeat tick.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	bootLastSpawned time.Time
+
 	// Restart tracking with exponential backoff to prevent crash loops
 	restartTracker *RestartTracker
 
@@ -773,12 +777,19 @@ func (d *Daemon) getDeaconSessionName() string {
 // Boot is a fresh-each-tick watchdog that decides whether to start/wake/nudge
 // the Deacon, centralizing the "when to wake" decision in an agent.
 // In degraded mode (no tmux), falls back to mechanical checks.
-func (d *Daemon) ensureBootRunning() {
-	b := boot.New(d.config.TownRoot)
+// bootSpawnCooldown prevents Boot from spawning on every daemon heartbeat.
+// Boot triage runs are expensive (AI reasoning); if one just ran, skip.
+const bootSpawnCooldown = 2 * time.Minute
 
-	// Boot is ephemeral - always spawn fresh each tick.
-	// spawnTmux() kills any existing session before spawning, ensuring
-	// Boot never accumulates context across triage cycles.
+func (d *Daemon) ensureBootRunning() {
+	// Cooldown gate: skip if Boot was spawned recently (fixes #2084)
+	if !d.bootLastSpawned.IsZero() && time.Since(d.bootLastSpawned) < bootSpawnCooldown {
+		d.logger.Printf("Boot spawned %s ago, within cooldown (%s), skipping",
+			time.Since(d.bootLastSpawned).Round(time.Second), bootSpawnCooldown)
+		return
+	}
+
+	b := boot.New(d.config.TownRoot)
 
 	// Check for degraded mode
 	degraded := os.Getenv("GT_DEGRADED") == "true"
@@ -798,6 +809,7 @@ func (d *Daemon) ensureBootRunning() {
 		return
 	}
 
+	d.bootLastSpawned = time.Now()
 	d.logger.Println("Boot spawned successfully")
 }
 
@@ -894,6 +906,14 @@ const deaconGracePeriod = 5 * time.Minute
 // - Grace period only applies if heartbeat is from BEFORE we started Deacon
 // - If heartbeat is from AFTER start but stale, Deacon is stuck
 func (d *Daemon) checkDeaconHeartbeat() {
+	// Respect crash-loop guard: if the restart tracker says Deacon is in a
+	// crash loop, do not kill the session — the guard is deliberately holding
+	// off restarts to break the cycle. (Fixes #2086)
+	if d.restartTracker != nil && d.restartTracker.IsInCrashLoop("deacon") {
+		d.logger.Printf("Deacon is in crash-loop state, skipping heartbeat kill check")
+		return
+	}
+
 	// Always read heartbeat first (PATCH-005)
 	hb := deacon.ReadHeartbeat(d.config.TownRoot)
 
@@ -1222,15 +1242,29 @@ func (d *Daemon) getKnownRigs() []string {
 	return rigs
 }
 
-// getPatrolRigs returns the list of rigs for a patrol.
+// getPatrolRigs returns the list of operational rigs for a patrol.
 // If the patrol config specifies a rigs filter, only those rigs are returned.
-// Otherwise, all known rigs are returned.
+// Otherwise, all known rigs are returned. In both cases, non-operational
+// rigs (parked/docked) are filtered out at list-building time. (Fixes upstream #2082)
 func (d *Daemon) getPatrolRigs(patrol string) []string {
 	configRigs := GetPatrolRigs(d.patrolConfig, patrol)
+	var candidates []string
 	if len(configRigs) > 0 {
-		return configRigs
+		candidates = configRigs
+	} else {
+		candidates = d.getKnownRigs()
 	}
-	return d.getKnownRigs()
+
+	// Filter out non-operational rigs early to avoid per-rig skip noise
+	var operational []string
+	for _, rigName := range candidates {
+		if ok, reason := d.isRigOperational(rigName); ok {
+			operational = append(operational, rigName)
+		} else {
+			d.logger.Printf("Excluding %s from %s patrol: %s", rigName, patrol, reason)
+		}
+	}
+	return operational
 }
 
 // isRigOperational checks if a rig is in an operational state.
