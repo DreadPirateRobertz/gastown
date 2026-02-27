@@ -81,6 +81,10 @@ type Daemon struct {
 	// Nil when telemetry is disabled (GT_OTEL_METRICS_URL / GT_OTEL_LOGS_URL not set).
 	otelProvider *telemetry.Provider
 	metrics      *daemonMetrics
+
+	// jsonlPushFailures tracks consecutive git push failures for JSONL backup.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	jsonlPushFailures int
 }
 
 // sessionDeath records a detected session death for mass death analysis.
@@ -343,6 +347,18 @@ func (d *Daemon) Run() error {
 		d.logger.Printf("Dolt backup ticker started (interval %v)", interval)
 	}
 
+	// Start JSONL git backup ticker if configured.
+	// Exports issues to JSONL, scrubs ephemeral data, pushes to git repo.
+	var jsonlGitBackupTicker *time.Ticker
+	var jsonlGitBackupChan <-chan time.Time
+	if IsPatrolEnabled(d.patrolConfig, "jsonl_git_backup") {
+		interval := jsonlGitBackupInterval(d.patrolConfig)
+		jsonlGitBackupTicker = time.NewTicker(interval)
+		jsonlGitBackupChan = jsonlGitBackupTicker.C
+		defer jsonlGitBackupTicker.Stop()
+		d.logger.Printf("JSONL git backup ticker started (interval %v)", interval)
+	}
+
 	// Note: PATCH-010 uses per-session hooks in deacon/manager.go (SetAutoRespawnHook).
 	// Global pane-died hooks don't fire reliably in tmux 3.2a, so we rely on the
 	// per-session approach which has been tested to work for continuous recovery.
@@ -385,6 +401,13 @@ func (d *Daemon) Run() error {
 			// local backup directory on a 15-minute cadence.
 			if !d.isShutdownInProgress() {
 				d.syncDoltBackups()
+			}
+
+		case <-jsonlGitBackupChan:
+			// Periodic JSONL git backup — exports issues, scrubs ephemeral data,
+			// commits and pushes to git repo.
+			if !d.isShutdownInProgress() {
+				d.syncJsonlGitBackup()
 			}
 
 		case <-timer.C:
