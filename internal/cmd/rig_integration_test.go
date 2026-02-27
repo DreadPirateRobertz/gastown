@@ -43,8 +43,9 @@ var agentAllowlist = map[string][]string{
 	// Mayor is a clone (not worktree) - it's the canonical copy of the user's repo.
 	// For tracked beads repos, bd init creates files here (runs in mayor/rig).
 	"mayor": {
-		"?? AGENTS.md", // bd init: creates multi-provider instructions (tracked beads repos only)
-		"?? .claude/",  // bd init: creates .claude/settings.json with onboard prompt
+		"?? AGENTS.md",  // bd init: creates multi-provider instructions (tracked beads repos only)
+		"?? .claude/",   // bd init: creates .claude/settings.json with onboard prompt
+		"?? .gitignore", // EnsureGitignorePatterns: adds .claude/commands/, .runtime/, and .logs/ patterns
 	},
 
 	// Refinery is a worktree for the merge queue processor.
