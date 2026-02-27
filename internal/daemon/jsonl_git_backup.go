@@ -141,34 +141,82 @@ func (d *Daemon) syncJsonlGitBackup() {
 	d.logger.Printf("jsonl_git_backup: exported %d/%d database(s)", exported, len(databases))
 }
 
-// exportDatabaseToJsonl queries a database for non-ephemeral issues and writes
-// the result as JSONL to {gitRepo}/{db}.jsonl.
+// supplementalTables lists non-issues tables to include in JSONL backup.
+// These contain structural data (dependencies, labels, config) that would be
+// lost if we only backed up the issues table. Wisp tables are excluded — they
+// contain high-volume ephemeral data handled by the Reaper Dog.
+var supplementalTables = []string{
+	"comments",
+	"config",
+	"dependencies",
+	"events",
+	"labels",
+	"metadata",
+}
+
+// exportDatabaseToJsonl exports the issues table (with optional scrub) and all
+// supplemental tables to JSONL files in {gitRepo}/{db}/ directory.
 //
-// NOTE: Only exports the `issues` table. Wisp tables (wisps, wisp_dependencies,
-// wisp_events, wisp_labels, wisp_comments) are intentionally excluded — they
-// contain high-volume ephemeral patrol data that is digested and pruned by the
-// Reaper Dog. The permanent ledger lives in `issues`.
+// Issues go to {db}/issues.jsonl (scrubbed). Other tables go to {db}/{table}.jsonl.
+// Also writes a legacy {db}.jsonl (symlink to {db}/issues.jsonl) for backward compat.
 //
-// Returns the number of records exported.
+// Returns the total number of records exported across all tables.
 func (d *Daemon) exportDatabaseToJsonl(db, gitRepo, dataDir string, scrub bool) (int, error) {
-	// Validate database name to prevent SQL injection.
 	if !validDBName.MatchString(db) {
 		return 0, fmt.Errorf("invalid database name: %q", db)
 	}
 
-	// Build query. Use fully-qualified table name to avoid fragile USE+SELECT.
+	// Create per-database subdirectory.
+	dbDir := filepath.Join(gitRepo, db)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		return 0, fmt.Errorf("creating dir %s: %w", dbDir, err)
+	}
+
+	total := 0
+
+	// 1. Export issues table (with scrub filter).
 	var query string
 	if scrub {
 		query = "SELECT * FROM `" + db + "`.issues" + scrubWhereClause
 	} else {
 		query = "SELECT * FROM `" + db + "`.issues ORDER BY id"
 	}
+	n, err := d.exportTableToJsonl(db, "issues", query, dbDir, dataDir)
+	if err != nil {
+		return 0, fmt.Errorf("issues: %w", err)
+	}
+	total += n
 
+	// Also write legacy flat file for backward compatibility.
+	legacyPath := filepath.Join(gitRepo, db+".jsonl")
+	newIssuesPath := filepath.Join(dbDir, "issues.jsonl")
+	// Copy instead of symlink for git compatibility.
+	if data, err := os.ReadFile(newIssuesPath); err == nil {
+		_ = os.WriteFile(legacyPath, data, 0644)
+	}
+
+	// 2. Export supplemental tables (no scrub, full export).
+	for _, table := range supplementalTables {
+		tQuery := fmt.Sprintf("SELECT * FROM `%s`.`%s` ORDER BY 1", db, table)
+		tn, err := d.exportTableToJsonl(db, table, tQuery, dbDir, dataDir)
+		if err != nil {
+			// Non-fatal for supplemental tables — log and continue.
+			d.logger.Printf("jsonl_git_backup: %s/%s: export failed (non-fatal): %v", db, table, err)
+			continue
+		}
+		total += tn
+	}
+
+	d.logger.Printf("jsonl_git_backup: %s: exported %d records across %d tables", db, total, 1+len(supplementalTables))
+	return total, nil
+}
+
+// exportTableToJsonl runs a query and writes the result as JSONL to {dir}/{table}.jsonl.
+// Returns the number of records exported.
+func (d *Daemon) exportTableToJsonl(db, table, query, dir, dataDir string) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), jsonlExportTimeout)
 	defer cancel()
 
-	// Run from the Dolt data dir so dolt auto-discovers the running server.
-	// This is the same pattern used by runDoltSQL in dolt_remotes.go.
 	cmd := exec.CommandContext(ctx, "dolt", "sql", "-r", "json", "-q", query)
 	cmd.Dir = dataDir
 
@@ -184,7 +232,6 @@ func (d *Daemon) exportDatabaseToJsonl(db, gitRepo, dataDir string, scrub bool) 
 		return 0, err
 	}
 
-	// Parse Dolt JSON output: {"rows": [...]}
 	var result struct {
 		Rows []json.RawMessage `json:"rows"`
 	}
@@ -192,13 +239,11 @@ func (d *Daemon) exportDatabaseToJsonl(db, gitRepo, dataDir string, scrub bool) 
 		return 0, fmt.Errorf("parsing dolt output: %w", err)
 	}
 
-	// Write as true JSONL (one JSON object per line).
-	outPath := filepath.Join(gitRepo, db+".jsonl")
+	outPath := filepath.Join(dir, table+".jsonl")
 	tmpPath := outPath + ".tmp"
 
 	var buf bytes.Buffer
 	for _, row := range result.Rows {
-		// Compact each row to ensure single-line JSON.
 		var compact bytes.Buffer
 		if err := json.Compact(&compact, row); err != nil {
 			return 0, fmt.Errorf("compacting JSON row: %w", err)
@@ -207,7 +252,6 @@ func (d *Daemon) exportDatabaseToJsonl(db, gitRepo, dataDir string, scrub bool) 
 		buf.WriteByte('\n')
 	}
 
-	// Atomic write: write to temp, then rename.
 	if err := os.WriteFile(tmpPath, buf.Bytes(), 0644); err != nil {
 		return 0, fmt.Errorf("writing %s: %w", tmpPath, err)
 	}
@@ -216,7 +260,6 @@ func (d *Daemon) exportDatabaseToJsonl(db, gitRepo, dataDir string, scrub bool) 
 		return 0, fmt.Errorf("renaming %s: %w", tmpPath, err)
 	}
 
-	d.logger.Printf("jsonl_git_backup: %s: exported %d records", db, len(result.Rows))
 	return len(result.Rows), nil
 }
 
@@ -224,8 +267,8 @@ func (d *Daemon) exportDatabaseToJsonl(db, gitRepo, dataDir string, scrub bool) 
 // The commit message includes counts for successful exports AND names of failed
 // databases, so partial failures are visible in git history.
 func (d *Daemon) commitAndPushJsonlBackup(gitRepo string, databases []string, counts map[string]int, failed []string) error {
-	// Stage all JSONL files.
-	if err := d.runGitCmd(gitRepo, gitCmdTimeout, "add", "*.jsonl"); err != nil {
+	// Stage all JSONL files (flat legacy files + subdirectory structure).
+	if err := d.runGitCmd(gitRepo, gitCmdTimeout, "add", "-A", "*.jsonl", "*/"); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
 
