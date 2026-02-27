@@ -1444,12 +1444,12 @@ func (t *Tmux) AcceptBypassPermissionsWarning(session string) error {
 // GetPaneCommand returns the current command running in a pane.
 // Returns "bash", "zsh", "claude", "node", etc.
 func (t *Tmux) GetPaneCommand(session string) (string, error) {
-	// Use display-message targeting pane 0 explicitly (:0.0) to avoid
-	// returning the active pane's command in multi-pane sessions.
-	// Agent processes always run in pane 0; without explicit targeting,
-	// a user-created split pane (running a shell) could cause health
+	// Use display-message targeting the first window explicitly (:^) to avoid
+	// returning the active pane's command when a non-agent window is focused.
+	// Agent processes always run in the first window; without explicit targeting,
+	// a user-created window or split pane (running a shell) could cause health
 	// checks to falsely report the agent as dead.
-	out, err := t.run("display-message", "-t", session+":0.0", "-p", "#{pane_current_command}")
+	out, err := t.run("display-message", "-t", session+":^", "-p", "#{pane_current_command}")
 	if err != nil {
 		return "", err
 	}
@@ -1461,9 +1461,10 @@ func (t *Tmux) GetPaneCommand(session string) (string, error) {
 }
 
 // FindAgentPane finds the pane running an agent process within a session.
-// In multi-pane sessions, send-keys -t <session> targets the active/focused pane,
-// which may not be the agent pane. This method enumerates all panes and returns
-// the pane ID (e.g., "%5") of the one running the agent.
+// In multi-window/multi-pane sessions, send-keys -t <session> targets the
+// active/focused pane, which may not be the agent pane. This method enumerates
+// all panes across all windows (-s) and returns the pane ID (e.g., "%5") of
+// the one running the agent.
 //
 // Detection checks pane_current_command, then falls back to process tree inspection
 // (same logic as IsRuntimeRunning) to handle agents started via shell wrappers.
@@ -1471,8 +1472,8 @@ func (t *Tmux) GetPaneCommand(session string) (string, error) {
 // Returns ("", nil) if the session has only one pane (no disambiguation needed),
 // or if no agent pane can be identified (caller should fall back to session targeting).
 func (t *Tmux) FindAgentPane(session string) (string, error) {
-	// List all panes with ID, command, and PID
-	out, err := t.run("list-panes", "-t", session, "-F", "#{pane_id}\t#{pane_current_command}\t#{pane_pid}")
+	// List all panes across all windows with ID, command, and PID
+	out, err := t.run("list-panes", "-s", "-t", session, "-F", "#{pane_id}\t#{pane_current_command}\t#{pane_pid}")
 	if err != nil {
 		return "", err
 	}
@@ -1552,13 +1553,13 @@ func (t *Tmux) GetPaneWorkDir(session string) (string, error) {
 }
 
 // GetPanePID returns the PID of the pane's main process.
-// When target is a session name, explicitly targets pane 0 (:0.0) to avoid
-// returning the active pane's PID in multi-pane sessions. When target is
+// When target is a session name, explicitly targets the first window (:^) to avoid
+// returning the active pane's PID when a non-agent window is focused. When target is
 // a pane ID (e.g., "%5"), uses it directly.
 func (t *Tmux) GetPanePID(target string) (string, error) {
 	tmuxTarget := target
 	if !strings.HasPrefix(target, "%") {
-		tmuxTarget = target + ":0.0"
+		tmuxTarget = target + ":^"
 	}
 	out, err := t.run("display-message", "-t", tmuxTarget, "-p", "#{pane_pid}")
 	if err != nil {
@@ -1930,28 +1931,55 @@ func (t *Tmux) IsAgentRunning(session string, expectedPaneCommands ...string) bo
 }
 
 // IsRuntimeRunning checks if a runtime appears to be running in the session.
-// Checks both pane command and child processes (for agents started via shell).
+// First checks the first window (where the agent is started) via GetPaneCommand/GetPanePID.
+// Falls back to scanning all panes across all windows for multi-window sessions.
 // This is the unified agent detection method for all agent types.
 func (t *Tmux) IsRuntimeRunning(session string, processNames []string) bool {
 	if len(processNames) == 0 {
 		return false
 	}
+	// Fast path: check first window (agent's expected location)
+	if t.checkPaneForRuntime(session, processNames) {
+		return true
+	}
+	// Fallback: scan all panes across all windows. The agent is almost always
+	// in the first window, but if it isn't, we scan everything before declaring dead.
+	out, err := t.run("list-panes", "-s", "-t", session, "-F", "#{pane_current_command}\t#{pane_pid}")
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		parts := strings.SplitN(line, "\t", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		cmd, pid := parts[0], parts[1]
+		if matchesPaneRuntime(cmd, pid, processNames) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkPaneForRuntime checks if the first window's pane is running a matching process.
+func (t *Tmux) checkPaneForRuntime(session string, processNames []string) bool {
 	cmd, err := t.GetPaneCommand(session)
 	if err != nil {
 		return false
 	}
-	// Check direct pane command match
+	pid, _ := t.GetPanePID(session)
+	return matchesPaneRuntime(cmd, pid, processNames)
+}
+
+// matchesPaneRuntime checks if a pane with the given command and PID is running a matching process.
+func matchesPaneRuntime(cmd, pid string, processNames []string) bool {
+	// Direct command match
 	for _, name := range processNames {
 		if cmd == name {
 			return true
 		}
 	}
-	// Check for child processes if pane command is a shell or unrecognized.
-	// This handles:
-	// - Agents started with "bash -c 'export ... && agent ...'"
-	// - Claude Code showing version as argv[0] (e.g., "2.1.29")
-	pid, err := t.GetPanePID(session)
-	if err != nil || pid == "" {
+	if pid == "" {
 		return false
 	}
 	// If pane command is a shell, check descendants
@@ -1960,9 +1988,7 @@ func (t *Tmux) IsRuntimeRunning(session string, processNames []string) bool {
 			return hasDescendantWithNames(pid, processNames, 0)
 		}
 	}
-	// If pane command is unrecognized (not in processNames, not a shell),
-	// check if the process ITSELF matches (handles version-as-argv[0] like "2.1.30")
-	// before checking descendants.
+	// Unrecognized command: check if process itself matches (version-as-argv[0])
 	if processMatchesNames(pid, processNames) {
 		return true
 	}
@@ -2962,4 +2988,3 @@ func buildAutoRespawnHookCmd(tmuxCmd, session string) string {
 		`run-shell -b "sleep 3 && %s list-panes -t '%s' -F '##{pane_dead}' 2>/dev/null | grep -q 1 && %s respawn-pane -k -t '%s' && %s set-option -t '%s' remain-on-exit on || true"`,
 		tmuxCmd, session, tmuxCmd, session, tmuxCmd, session)
 }
-
