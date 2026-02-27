@@ -704,12 +704,15 @@ func InstantiateFormulaOnBead(formulaName, beadID, title, hookWorkDir, townRoot 
 					Dir(formulaWorkDir).
 					WithGTRoot(townRoot).
 					Run(); retryErr != nil {
+					telemetry.RecordMolCook(context.Background(), formulaName, retryErr)
 					return nil, fmt.Errorf("cooking formula %s: %w (embedded retry: %v)", formulaName, err, retryErr)
 				}
 			} else {
+				telemetry.RecordMolCook(context.Background(), formulaName, err)
 				return nil, fmt.Errorf("cooking formula %s: %w", formulaName, err)
 			}
 		}
+		telemetry.RecordMolCook(context.Background(), formulaName, nil)
 	}
 
 	// Build variable list once so both legacy and fallback paths use
@@ -740,8 +743,10 @@ func InstantiateFormulaOnBead(formulaName, beadID, title, hookWorkDir, townRoot 
 	// Parse wisp output to get the root ID
 	wispRootID, err := parseWispIDFromJSON(wispOut)
 	if err != nil {
+		telemetry.RecordMolWisp(context.Background(), formulaName, "", beadID, err)
 		return nil, fmt.Errorf("parsing wisp output: %w", err)
 	}
+	telemetry.RecordMolWisp(context.Background(), formulaName, wispRootID, beadID, nil)
 
 	// Step 3: Bond wisp to original bead (creates compound).
 	//
