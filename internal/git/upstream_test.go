@@ -7,64 +7,77 @@ import (
 func TestGit_UpstreamRemote(t *testing.T) {
 	tmp := t.TempDir()
 	g := NewGit(tmp)
-
-	// Need an actual git repo initialized
 	runGit(t, tmp, "init", "--initial-branch", "main")
 
-	// Initially, no upstream remote
-	has, err := g.HasUpstreamRemote()
-	if err != nil {
-		t.Fatalf("HasUpstreamRemote initially: %v", err)
-	}
-	if has {
-		t.Fatal("expected no upstream remote initially")
-	}
+	t.Run("initially absent", func(t *testing.T) {
+		has, err := g.HasUpstreamRemote()
+		if err != nil {
+			t.Fatalf("HasUpstreamRemote: %v", err)
+		}
+		if has {
+			t.Fatal("expected no upstream remote initially")
+		}
 
-	url, err := g.GetUpstreamURL()
-	if err != nil {
-		t.Fatalf("GetUpstreamURL initially: %v", err)
-	}
-	if url != "" {
-		t.Errorf("expected empty upstream URL initially, got %q", url)
-	}
+		url, err := g.GetUpstreamURL()
+		if err != nil {
+			t.Fatalf("GetUpstreamURL: %v", err)
+		}
+		if url != "" {
+			t.Errorf("expected empty URL, got %q", url)
+		}
+	})
 
 	upstream1 := "https://example.com/upstream1.git"
-	if err := g.AddUpstreamRemote(upstream1); err != nil {
-		t.Fatalf("AddUpstreamRemote %q: %v", upstream1, err)
-	}
 
-	has, err = g.HasUpstreamRemote()
-	if err != nil {
-		t.Fatalf("HasUpstreamRemote after add: %v", err)
-	}
-	if !has {
-		t.Fatal("expected upstream remote to exist")
-	}
+	t.Run("add", func(t *testing.T) {
+		if err := g.AddUpstreamRemote(upstream1); err != nil {
+			t.Fatalf("AddUpstreamRemote: %v", err)
+		}
 
-	url, err = g.GetUpstreamURL()
-	if err != nil {
-		t.Fatalf("GetUpstreamURL after add: %v", err)
-	}
-	if url != upstream1 {
-		t.Errorf("expected upstream URL %q, got %q", upstream1, url)
-	}
+		has, err := g.HasUpstreamRemote()
+		if err != nil {
+			t.Fatalf("HasUpstreamRemote: %v", err)
+		}
+		if !has {
+			t.Fatal("expected upstream remote to exist")
+		}
 
-	// Idempotent add (same URL)
-	if err := g.AddUpstreamRemote(upstream1); err != nil {
-		t.Fatalf("AddUpstreamRemote idempotent %q: %v", upstream1, err)
-	}
+		url, err := g.GetUpstreamURL()
+		if err != nil {
+			t.Fatalf("GetUpstreamURL: %v", err)
+		}
+		if url != upstream1 {
+			t.Errorf("URL = %q, want %q", url, upstream1)
+		}
+	})
 
-	// Update (different URL)
+	t.Run("idempotent same URL is true no-op", func(t *testing.T) {
+		if err := g.AddUpstreamRemote(upstream1); err != nil {
+			t.Fatalf("AddUpstreamRemote: %v", err)
+		}
+
+		url, err := g.GetUpstreamURL()
+		if err != nil {
+			t.Fatalf("GetUpstreamURL: %v", err)
+		}
+		if url != upstream1 {
+			t.Errorf("URL = %q, want %q", url, upstream1)
+		}
+	})
+
 	upstream2 := "https://example.com/upstream2.git"
-	if err := g.AddUpstreamRemote(upstream2); err != nil {
-		t.Fatalf("AddUpstreamRemote update %q: %v", upstream2, err)
-	}
 
-	url, err = g.GetUpstreamURL()
-	if err != nil {
-		t.Fatalf("GetUpstreamURL after update: %v", err)
-	}
-	if url != upstream2 {
-		t.Errorf("expected upstream URL %q, got %q", upstream2, url)
-	}
+	t.Run("update different URL", func(t *testing.T) {
+		if err := g.AddUpstreamRemote(upstream2); err != nil {
+			t.Fatalf("AddUpstreamRemote: %v", err)
+		}
+
+		url, err := g.GetUpstreamURL()
+		if err != nil {
+			t.Fatalf("GetUpstreamURL: %v", err)
+		}
+		if url != upstream2 {
+			t.Errorf("URL = %q, want %q", url, upstream2)
+		}
+	})
 }
