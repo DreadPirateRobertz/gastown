@@ -98,6 +98,10 @@ type Daemon struct {
 	lastDoctorJanitor   time.Time
 	lastDoctorBackup    time.Time
 	lastDoctorEscalate  time.Time
+
+	// lastMaintenanceRun tracks when scheduled maintenance last ran.
+	// Only accessed from heartbeat loop goroutine - no sync needed.
+	lastMaintenanceRun time.Time
 }
 
 // sessionDeath records a detected session death for mass death analysis.
@@ -442,6 +446,20 @@ func (d *Daemon) Run() error {
 		d.logger.Printf("Compactor dog ticker started (interval %v)", interval)
 	}
 
+	// Start scheduled maintenance ticker if configured.
+	// Checks periodically whether we're in the maintenance window and
+	// runs `gt maintain --force` when commit counts exceed threshold.
+	var scheduledMaintenanceTicker *time.Ticker
+	var scheduledMaintenanceChan <-chan time.Time
+	if IsPatrolEnabled(d.patrolConfig, "scheduled_maintenance") {
+		interval := maintenanceCheckInterval(d.patrolConfig)
+		scheduledMaintenanceTicker = time.NewTicker(interval)
+		scheduledMaintenanceChan = scheduledMaintenanceTicker.C
+		defer scheduledMaintenanceTicker.Stop()
+		window := maintenanceWindow(d.patrolConfig)
+		d.logger.Printf("Scheduled maintenance ticker started (check interval %v, window %s)", interval, window)
+	}
+
 	// Note: PATCH-010 uses per-session hooks in deacon/manager.go (SetAutoRespawnHook).
 	// Global pane-died hooks don't fire reliably in tmux 3.2a, so we rely on the
 	// per-session approach which has been tested to work for continuous recovery.
@@ -525,6 +543,13 @@ func (d *Daemon) Run() error {
 			// Reclaims commit graph storage. Doctor Dog gc reclaims chunks after.
 			if !d.isShutdownInProgress() {
 				d.runCompactorDog()
+			}
+
+		case <-scheduledMaintenanceChan:
+			// Scheduled maintenance — checks if we're in the maintenance window
+			// and runs `gt maintain --force` when commit counts exceed threshold.
+			if !d.isShutdownInProgress() {
+				d.runScheduledMaintenance()
 			}
 
 		case <-timer.C:
