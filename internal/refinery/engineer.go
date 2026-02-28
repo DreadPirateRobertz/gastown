@@ -996,7 +996,7 @@ func (e *Engineer) HandleMRInfoFailure(mr *MRInfo, result ProcessResult) {
 //
 //	Title: Resolve merge conflicts: <original-issue-title>
 //	Type: task
-//	Priority: inherit from original + boost (P2 -> P1)
+//	Priority: inherit from original (ZFC: agent decides boost strategy)
 //	Parent: original MR bead
 //	Description: metadata including branch, conflict SHA, etc.
 //
@@ -1055,12 +1055,8 @@ func (e *Engineer) createConflictResolutionTaskForMR(mr *MRInfo, _ ProcessResult
 		}
 	}
 
-	// Priority boost: decrease priority number (lower = higher priority)
-	// P2 -> P1, P1 -> P0, P0 stays P0
-	boostedPriority := mr.Priority - 1
-	if boostedPriority < 0 {
-		boostedPriority = 0
-	}
+	// ZFC: pass through original priority — boost strategy is a policy
+	// judgment that agents should make based on retry count and context.
 
 	// Increment retry count for tracking
 	retryCount := mr.RetryCount + 1
@@ -1099,7 +1095,7 @@ The Refinery will automatically retry the merge after you force-push.`,
 	task, err := e.beads.Create(beads.CreateOptions{
 		Title:       taskTitle,
 		Type:        "task",
-		Priority:    boostedPriority,
+		Priority:    mr.Priority,
 		Description: description,
 		Actor:       e.rig.Name + "/refinery",
 	})
@@ -1400,12 +1396,12 @@ func detectQueueAnomalies(
 		// 2) Orphaned branch detection.
 		localExists, remoteTrackingExists, err := branchExistsFn(fields.Branch)
 		if err == nil && !localExists && !remoteTrackingExists {
-			anomalies = append(anomalies, &MRAnomaly{
-				ID:       issue.ID,
-				Branch:   fields.Branch,
-				Type:     "orphaned-branch",
-				Severity: "critical",
-				Detail:   "MR branch is missing locally and in origin/* tracking refs",
+			// ZFC: Go transports data, agent decides severity
+		anomalies = append(anomalies, &MRAnomaly{
+				ID:     issue.ID,
+				Branch: fields.Branch,
+				Type:   "orphaned-branch",
+				Detail: "MR branch is missing locally and in origin/* tracking refs",
 			})
 		}
 	}

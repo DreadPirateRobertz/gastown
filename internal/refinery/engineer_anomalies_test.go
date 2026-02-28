@@ -87,8 +87,9 @@ worker: nux`,
 	if anomalies[0].Type != "orphaned-branch" {
 		t.Fatalf("anomaly type = %q, want orphaned-branch", anomalies[0].Type)
 	}
-	if anomalies[0].Severity != "critical" {
-		t.Fatalf("anomaly severity = %q, want critical", anomalies[0].Severity)
+	// ZFC: severity should NOT be set by Go — agents decide classification
+	if anomalies[0].Severity != "" {
+		t.Fatalf("anomaly severity = %q, want empty (ZFC: agent classifies)", anomalies[0].Severity)
 	}
 	if anomalies[0].ID != "gt-orphan" {
 		t.Fatalf("anomaly ID = %q, want gt-orphan", anomalies[0].ID)
