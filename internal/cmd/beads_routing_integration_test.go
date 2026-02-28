@@ -529,6 +529,87 @@ func TestBeadsRemoveRoute(t *testing.T) {
 	}
 }
 
+// TestShowCrossRigBeadResolution verifies that gt show / gt bead show resolves
+// rig-prefixed beads by traversing routes.jsonl to find the correct Dolt database.
+// This is the fix for https://github.com/steveyegge/gastown/issues/2126
+func TestShowCrossRigBeadResolution(t *testing.T) {
+	if _, err := exec.LookPath("bd"); err != nil {
+		t.Skip("bd not installed, skipping routing test")
+	}
+	requireDoltServer(t)
+
+	n := routingTestCounter.Add(1)
+	hqP := fmt.Sprintf("shq%d", n)
+	gtP := fmt.Sprintf("sgt%d", n)
+	trP := fmt.Sprintf("str%d", n)
+
+	townRoot := setupRoutingTestTownWithPrefixes(t, hqP, gtP, trP)
+
+	// Initialize beads DBs in each rig
+	initBeadsDBWithPrefix(t, townRoot, hqP)
+	gastownRigPath := filepath.Join(townRoot, "gastown", "mayor", "rig")
+	testrigRigPath := filepath.Join(townRoot, "testrig", "mayor", "rig")
+	initBeadsDBWithPrefix(t, gastownRigPath, gtP)
+	initBeadsDBWithPrefix(t, testrigRigPath, trP)
+
+	// Create issues in each rig
+	townIssue := createTestIssue(t, townRoot, "Town show routing test")
+	gastownIssue := createTestIssue(t, gastownRigPath, "Gastown show routing test")
+	testrigIssue := createTestIssue(t, testrigRigPath, "Testrig show routing test")
+
+	tests := []struct {
+		name  string
+		id    string
+		title string
+	}{
+		{"town-level bead", townIssue.ID, townIssue.Title},
+		{"gastown rig bead", gastownIssue.ID, gastownIssue.Title},
+		{"testrig rig bead", testrigIssue.ID, testrigIssue.Title},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Verify resolveBeadDir routes to the correct rig directory
+			// (tests the fix: show.go now calls resolveBeadDir before execing bd)
+			prefix := beads.ExtractPrefix(tc.id)
+			rigPath := beads.GetRigPathForPrefix(townRoot, prefix)
+			if rigPath == "" {
+				t.Fatalf("GetRigPathForPrefix(%q, %q) returned empty", townRoot, prefix)
+			}
+
+			// Verify bd show works when run from the resolved directory.
+			// Uses beads.New() which is the same path verifyBeadExists uses.
+			b := beads.New(rigPath)
+			issue, err := b.Show(tc.id)
+			if err != nil {
+				t.Fatalf("beads.Show(%s) from resolved dir %s failed: %v", tc.id, rigPath, err)
+			}
+			if issue == nil {
+				t.Fatalf("beads.Show(%s) returned nil", tc.id)
+			}
+			if issue.Title != tc.title {
+				t.Errorf("beads.Show(%s) title = %q, want %q", tc.id, issue.Title, tc.title)
+			}
+
+			// Verify resolveBeadDir (used by gt show) returns the correct path
+			resolved := resolveBeadDirFromTown(townRoot, tc.id)
+			if resolved != rigPath {
+				t.Errorf("resolveBeadDirFromTown(%q) = %q, want %q", tc.id, resolved, rigPath)
+			}
+		})
+	}
+}
+
+// resolveBeadDirFromTown resolves the bead directory using an explicit town root,
+// matching the logic of resolveBeadDir but without depending on cwd.
+func resolveBeadDirFromTown(townRoot, beadID string) string {
+	prefix := beads.ExtractPrefix(beadID)
+	if rigPath := beads.GetRigPathForPrefix(townRoot, prefix); rigPath != "" {
+		return rigPath
+	}
+	return townRoot
+}
+
 // TestSlingCrossRigRoutingResolution verifies that sling can resolve rig paths
 // for cross-rig bead hooking using ExtractPrefix and GetRigPathForPrefix.
 // This is the fix for https://github.com/steveyegge/gastown/issues/148

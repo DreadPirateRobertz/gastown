@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -47,10 +48,22 @@ func runShow(cmd *cobra.Command, args []string) error {
 }
 
 // execBdShow replaces the current process with 'bd show'.
+// Resolves the correct working directory from the bead ID prefix via routes.jsonl
+// so that bd finds the right Dolt database for rig-prefixed beads.
 func execBdShow(args []string) error {
 	bdPath, err := exec.LookPath("bd")
 	if err != nil {
 		return fmt.Errorf("bd not found in PATH: %w", err)
+	}
+
+	// Resolve working directory from bead ID prefix.
+	// The first non-flag argument is the bead ID.
+	if beadID := firstNonFlagArg(args); beadID != "" {
+		if dir := resolveBeadDir(beadID); dir != "" && dir != "." {
+			if err := os.Chdir(dir); err == nil {
+				// Chdir succeeded — bd will inherit this working directory
+			}
+		}
 	}
 
 	// Build args: bd show <all-args>
@@ -58,4 +71,14 @@ func execBdShow(args []string) error {
 	fullArgs := append([]string{"bd", "show"}, args...)
 
 	return syscall.Exec(bdPath, fullArgs, os.Environ())
+}
+
+// firstNonFlagArg returns the first argument that doesn't start with "-".
+func firstNonFlagArg(args []string) string {
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-") {
+			return arg
+		}
+	}
+	return ""
 }
