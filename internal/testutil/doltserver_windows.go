@@ -12,8 +12,15 @@ import (
 )
 
 func startDoltServer() error {
+	// Clean up any testdb_* dirs leaked onto the production Dolt data dir
+	// by previous test runs (defense-in-depth against stale orphans).
+	cleanProductionTestDBs()
+
 	// Determine port: use GT_DOLT_PORT if set externally, otherwise find a free one.
-	if p := os.Getenv("GT_DOLT_PORT"); p != "" {
+	// GUARD: Never reuse production port 3307 for tests. beads SDK v0.56.x lacks
+	// the production port firewall, so tests would create testdb_* databases on the
+	// production server and they'd accumulate in .dolt-data/ (gt-l98j).
+	if p := os.Getenv("GT_DOLT_PORT"); p != "" && p != "3307" {
 		doltTestPort = p
 	} else {
 		port, err := FindFreePort()

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -138,6 +139,49 @@ func EnsureDoltForTestMain() error {
 	// to the ephemeral server when BEADS_TEST_MODE=1 is set.
 	os.Setenv("BEADS_DOLT_PORT", doltTestPort) //nolint:tenv // intentional process-wide env
 	return nil
+}
+
+// productionPort is the well-known Dolt SQL server port used by Gas Town production.
+const productionPort = "3307"
+
+// testDatabasePrefixes are name prefixes that indicate orphaned test databases.
+// Matches the beads SDK's testDatabasePrefixes list.
+var testDatabasePrefixes = []string{
+	"testdb_",
+	"beads_t",
+	"beads_pt",
+	"beads_vr",
+	"doctest_",
+	"doctortest_",
+}
+
+// cleanProductionTestDBs removes orphaned test database directories from the
+// production Dolt data dir (~/.dolt-data/ or ~/gt/.dolt-data/).
+// This is defense-in-depth: even if the port guard above prevents NEW leaks,
+// this cleans up any already-leaked dirs from previous runs (gt-l98j).
+func cleanProductionTestDBs() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	// Gas Town production data dir is ~/gt/.dolt-data/
+	dataDir := filepath.Join(home, "gt", ".dolt-data")
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		return // dir doesn't exist or not readable — fine
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		for _, prefix := range testDatabasePrefixes {
+			if strings.HasPrefix(name, prefix) {
+				_ = os.RemoveAll(filepath.Join(dataDir, name))
+				break
+			}
+		}
+	}
 }
 
 // portReady returns true if the dolt test port is accepting TCP connections.
