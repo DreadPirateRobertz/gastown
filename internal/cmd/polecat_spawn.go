@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -466,17 +467,21 @@ func verifyWorktreeExists(clonePath string) error {
 
 	// Check for .git file (worktrees have a .git file, not a .git directory)
 	gitPath := filepath.Join(clonePath, ".git")
-	gitInfo, err := os.Stat(gitPath)
-	if err != nil {
+	if _, err := os.Stat(gitPath); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("worktree missing .git file (not a valid git worktree): %s", clonePath)
 		}
 		return fmt.Errorf("checking .git: %w", err)
 	}
 
-	// .git should be a file for worktrees (contains "gitdir: ..." pointer)
-	// or a directory for regular clones - either is valid
-	_ = gitInfo // Both file and directory are acceptable
+	// Verify the worktree is actually functional by running git rev-parse.
+	// This catches broken .git files that point to nonexistent worktree entries
+	// (e.g., .repo.git/worktrees/<name> was deleted). See GitHub #2056.
+	cmd := exec.Command("git", "-C", clonePath, "rev-parse", "--is-inside-work-tree")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("worktree at %s is broken (git rev-parse failed: %s): %w",
+			clonePath, strings.TrimSpace(string(output)), err)
+	}
 
 	return nil
 }
