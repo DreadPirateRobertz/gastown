@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/refinery"
+	"github.com/steveyegge/gastown/internal/rig"
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/style"
 	"github.com/steveyegge/gastown/internal/tmux"
@@ -176,9 +179,33 @@ func unparkOneRig(rigName string) error {
 	return nil
 }
 
-// IsRigParked checks if a rig is parked in the wisp layer.
-// This function is exported for use by the daemon.
+// IsRigParked checks if a rig is parked. It checks the wisp layer first
+// (ephemeral/local state), then falls back to the bead layer (persistent/synced
+// state) so that parked status survives wisp cleanup.
 func IsRigParked(townRoot, rigName string) bool {
+	// Check wisp layer first (fast, local).
 	wispCfg := wisp.NewConfig(townRoot, rigName)
-	return wispCfg.GetString(RigStatusKey) == RigStatusParked
+	if wispCfg.GetString(RigStatusKey) == RigStatusParked {
+		return true
+	}
+
+	// Fall back to bead layer: check rig identity bead for status:parked label.
+	rigPath := filepath.Join(townRoot, rigName)
+	rigCfg, err := rig.LoadRigConfig(rigPath)
+	if err != nil || rigCfg.Beads == nil {
+		return false
+	}
+	rigBeadID := fmt.Sprintf("%s-rig-%s", rigCfg.Beads.Prefix, rigName)
+	rigBeadsDir := beads.ResolveBeadsDir(rigPath)
+	bd := beads.NewWithBeadsDir(rigPath, rigBeadsDir)
+	issue, err := bd.Show(rigBeadID)
+	if err != nil {
+		return false
+	}
+	for _, label := range issue.Labels {
+		if label == "status:parked" {
+			return true
+		}
+	}
+	return false
 }
