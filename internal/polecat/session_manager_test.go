@@ -437,6 +437,9 @@ func TestVerifyStartupNudgeDelivery_IdleAgent(t *testing.T) {
 	tm := tmux.NewTmux()
 	sessionName := "gt-test-nudge-verify-" + t.Name()
 
+	// Clean up any stale session from a previous crashed test run
+	_ = tm.KillSession(sessionName)
+
 	// Create a tmux session with a shell
 	if err := tm.NewSession(sessionName, os.TempDir()); err != nil {
 		t.Fatalf("NewSession: %v", err)
