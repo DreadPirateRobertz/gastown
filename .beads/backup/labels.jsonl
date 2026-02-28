@@ -236,6 +236,10 @@
 {"issue_id":"gt-wisp-tadjk","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-tadjk","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-tz5za","label":"gt:merge-request"}
+{"issue_id":"gt-wisp-uaeg34","label":"plugin:rebuild-gt"}
+{"issue_id":"gt-wisp-uaeg34","label":"result:success"}
+{"issue_id":"gt-wisp-uaeg34","label":"rig:gastown"}
+{"issue_id":"gt-wisp-uaeg34","label":"type:plugin-run"}
 {"issue_id":"gt-wisp-w0iaz","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-w0iaz","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-w6o6","label":"gt:merge-request"}
