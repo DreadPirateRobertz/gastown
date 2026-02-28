@@ -61,6 +61,15 @@ const (
 	// nudge if the agent appears idle after delivery. Each retry re-sends the
 	// nudge content and waits StartupNudgeVerifyDelay before checking again.
 	StartupNudgeMaxRetries = 3
+
+	// DialogDetectTimeout is how long to poll for startup dialogs (workspace trust,
+	// bypass permissions warning) before giving up. Covers slow machines where
+	// Claude Code may take several seconds to render the dialog after the process starts.
+	DialogDetectTimeout = 8 * time.Second
+
+	// DialogPollInterval is how often to check pane content when polling for
+	// startup dialogs.
+	DialogPollInterval = 500 * time.Millisecond
 )
 
 // Directory names within a Gas Town workspace.
