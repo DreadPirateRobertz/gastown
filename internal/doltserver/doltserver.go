@@ -908,6 +908,19 @@ func Start(townRoot string) error {
 		}
 	}
 
+	// Auto-remove orphaned beads_* databases from old naming convention (gt-7d4f).
+	// These are created by bd init with the beads_ prefix but never cleaned up
+	// after migration to the new <rigname> convention.
+	if orphans, findErr := FindOrphanedDatabases(townRoot); findErr == nil {
+		for _, orphan := range orphans {
+			if strings.HasPrefix(orphan.Name, "beads_") {
+				fmt.Fprintf(os.Stderr, "Cleanup: removing orphaned database %q (%s)\n",
+					orphan.Name, formatBytes(orphan.SizeBytes))
+				_ = os.RemoveAll(orphan.Path)
+			}
+		}
+	}
+
 	// Clean up stale Dolt LOCK files in all database directories
 	databases, _ := ListDatabases(townRoot)
 	for _, db := range databases {
