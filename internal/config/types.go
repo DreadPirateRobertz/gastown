@@ -357,6 +357,12 @@ type RigSettings struct {
 	// Overrides TownSettings.RoleAgents for this specific rig.
 	// Example: {"witness": "claude-haiku", "polecat": "claude-sonnet"}
 	RoleAgents map[string]string `json:"role_agents,omitempty"`
+
+	// HungSessionThresholdMinutes is the number of minutes of tmux inactivity
+	// after which a live agent session is considered hung. The witness uses this
+	// to detect agents that are alive but have stopped producing output.
+	// Default: 30 (from witness.DefaultHungSessionThresholdMinutes).
+	HungSessionThresholdMinutes int `json:"hung_session_threshold_minutes,omitempty"`
 }
 
 // CrewConfig represents crew workspace settings for a rig.

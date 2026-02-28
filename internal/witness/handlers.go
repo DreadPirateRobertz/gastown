@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/git"
 	"github.com/steveyegge/gastown/internal/mail"
 	"github.com/steveyegge/gastown/internal/rig"
@@ -19,13 +20,12 @@ import (
 	"github.com/steveyegge/gastown/internal/workspace"
 )
 
-// HungSessionThresholdMinutes is the number of minutes of tmux inactivity
-// after which a live agent session is considered hung. This catches agents
-// where the process is alive but has stopped producing output (infinite loop,
-// crashed mid-API-call, stuck waiting for something that will never arrive).
-// Conservative default: 30 minutes. Normal agent operations produce frequent
-// tmux output (tool calls, status updates). 30 minutes of silence is abnormal.
-const HungSessionThresholdMinutes = 30
+// DefaultHungSessionThresholdMinutes is the default number of minutes of tmux
+// inactivity after which a live agent session is considered hung. This catches
+// agents where the process is alive but has stopped producing output (infinite
+// loop, crashed mid-API-call, stuck waiting for something that will never arrive).
+// Can be overridden per-rig via RigSettings.HungSessionThresholdMinutes.
+const DefaultHungSessionThresholdMinutes = 30
 
 // initRegistryFromWorkDir initializes the session prefix and agent registries
 // from a work directory. This ensures session.PrefixFor(rigName) returns the
@@ -1045,6 +1045,15 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 	}
 	initRegistryFromTownRoot(townRoot)
 
+	// Load hung session threshold from rig config, falling back to default.
+	hungThreshold := DefaultHungSessionThresholdMinutes
+	rigPath := filepath.Join(townRoot, rigName)
+	if rigSettings, err := config.LoadRigSettings(config.RigSettingsPath(rigPath)); err == nil && rigSettings != nil {
+		if rigSettings.HungSessionThresholdMinutes > 0 {
+			hungThreshold = rigSettings.HungSessionThresholdMinutes
+		}
+	}
+
 	polecatsDir := filepath.Join(townRoot, rigName, "polecats")
 	entries, err := os.ReadDir(polecatsDir)
 	if err != nil {
@@ -1130,7 +1139,7 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 					lastActivity, actErr := t.GetSessionActivity(sessionName)
 					if actErr == nil && !lastActivity.IsZero() {
 						inactiveMinutes := int(time.Since(lastActivity).Minutes())
-						if inactiveMinutes >= HungSessionThresholdMinutes {
+						if inactiveMinutes >= hungThreshold {
 							_, hungHookBead := getAgentBeadState(workDir, agentBeadID)
 							zombie := ZombieResult{
 								PolecatName: polecatName,
