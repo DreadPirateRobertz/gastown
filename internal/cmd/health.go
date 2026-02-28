@@ -171,7 +171,7 @@ func checkServerHealth(townRoot string) *ServerHealth {
 	return sh
 }
 
-func checkDatabaseHealth(townRoot string, port int) []DatabaseHealth {
+func checkDatabaseHealth(_ string, port int) []DatabaseHealth {
 	productionDBs := []string{"hq", "beads", "gastown"}
 	var results []DatabaseHealth
 
@@ -207,7 +207,7 @@ func checkDatabaseHealth(townRoot string, port int) []DatabaseHealth {
 	return results
 }
 
-func checkPollution(townRoot string, port int) []PollutionRecord {
+func checkPollution(_ string, port int) []PollutionRecord {
 	productionDBs := []string{"hq", "beads", "gastown"}
 	var records []PollutionRecord
 

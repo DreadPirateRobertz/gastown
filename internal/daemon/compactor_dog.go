@@ -170,7 +170,7 @@ func (d *Daemon) compactorCountCommits(dbName string) (int, error) {
 	defer db.Close()
 
 	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s`.dolt_log", dbName)
+	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s`.dolt_log", dbName) //nolint:gosec // G201: dbName is an internal Dolt database name, not user input
 	if err := db.QueryRowContext(ctx, query).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count dolt_log: %w", err)
 	}
@@ -325,10 +325,10 @@ func (d *Daemon) compactorGetHead(db *sql.DB, dbName string) (string, error) {
 	defer cancel()
 
 	var hash string
-	query := fmt.Sprintf("SELECT DOLT_HASHOF('main') FROM `%s`.dual", dbName)
+	query := fmt.Sprintf("SELECT DOLT_HASHOF('main') FROM `%s`.dual", dbName) //nolint:gosec // G201: internal Dolt db name
 	if err := db.QueryRowContext(ctx, query).Scan(&hash); err != nil {
 		// Fallback: try without dual table.
-		query = fmt.Sprintf("SELECT commit_hash FROM `%s`.dolt_log ORDER BY date DESC LIMIT 1", dbName)
+		query = fmt.Sprintf("SELECT commit_hash FROM `%s`.dolt_log ORDER BY date DESC LIMIT 1", dbName) //nolint:gosec // G201: internal Dolt db name
 		if err := db.QueryRowContext(ctx, query).Scan(&hash); err != nil {
 			return "", err
 		}
@@ -357,7 +357,7 @@ func (d *Daemon) compactorGetRootCommit(db *sql.DB, dbName string) (string, erro
 	defer cancel()
 
 	var hash string
-	query := fmt.Sprintf("SELECT commit_hash FROM `%s`.dolt_log ORDER BY date ASC LIMIT 1", dbName)
+	query := fmt.Sprintf("SELECT commit_hash FROM `%s`.dolt_log ORDER BY date ASC LIMIT 1", dbName) //nolint:gosec // G201: internal Dolt db name
 	if err := db.QueryRowContext(ctx, query).Scan(&hash); err != nil {
 		return "", err
 	}
@@ -370,7 +370,7 @@ func (d *Daemon) compactorGetRowCounts(db *sql.DB, dbName string) (map[string]in
 	defer cancel()
 
 	// Get list of user tables (excluding dolt system tables).
-	query := fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_schema = '%s' AND table_name NOT LIKE 'dolt_%%'", dbName)
+	query := fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_schema = '%s' AND table_name NOT LIKE 'dolt_%%'", dbName) //nolint:gosec // G201: internal Dolt db name
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("list tables: %w", err)
