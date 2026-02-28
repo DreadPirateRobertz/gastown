@@ -194,7 +194,21 @@ func runNamepoolThemes(cmd *cobra.Command, args []string) error {
 			if t.IsCustom {
 				label = "custom, "
 			}
-			fmt.Printf("  %s (%s%d names)\n", t.Name, label, t.Count)
+			fmt.Printf("\n  %s (%s%d names):\n", t.Name, label, t.Count)
+			// Show name preview
+			var names []string
+			if t.IsCustom && townRoot != "" {
+				names, _ = polecat.ResolveThemeNames(townRoot, t.Name)
+			} else {
+				names, _ = polecat.GetThemeNames(t.Name)
+			}
+			if len(names) > 0 {
+				preview := names
+				if len(preview) > 10 {
+					preview = preview[:10]
+				}
+				fmt.Printf("    %s...\n", strings.Join(preview, ", "))
+			}
 		}
 		return nil
 	}

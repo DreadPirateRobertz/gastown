@@ -615,6 +615,32 @@ func TestParseThemeFile_ReservedNames(t *testing.T) {
 	}
 }
 
+func TestParseThemeFile_InvalidFormat(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "namepool-theme-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Names with spaces, special chars should be filtered
+	content := "valid-name\nhas space\nfoo/bar\ngood-name\n123-start\n"
+	path := filepath.Join(tmpDir, "invalid.txt")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	names, err := ParseThemeFile(path)
+	if err != nil {
+		t.Fatalf("ParseThemeFile error: %v", err)
+	}
+	if len(names) != 2 {
+		t.Fatalf("expected 2 valid names (valid-name, good-name), got %v", names)
+	}
+	if names[0] != "valid-name" || names[1] != "good-name" {
+		t.Errorf("expected [valid-name, good-name], got %v", names)
+	}
+}
+
 func TestParseThemeFile_Empty(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "namepool-theme-*")
 	if err != nil {

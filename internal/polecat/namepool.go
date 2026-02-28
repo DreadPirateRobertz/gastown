@@ -546,6 +546,10 @@ func ParseThemeFile(path string) ([]string, error) {
 			fmt.Fprintf(os.Stderr, "warning: skipping name %q (must be >3 characters)\n", name)
 			continue
 		}
+		if !validPoolNameRe.MatchString(name) {
+			fmt.Fprintf(os.Stderr, "warning: skipping invalid name %q (must be lowercase alphanumeric with hyphens)\n", name)
+			continue
+		}
 		if ReservedInfraAgentNames[name] {
 			fmt.Fprintf(os.Stderr, "warning: skipping reserved name %q\n", name)
 			continue
