@@ -1517,49 +1517,73 @@ func IsShutdownInProgress(townRoot string) bool {
 }
 
 // IsRunning checks if a daemon is running for the given town.
-// It checks the PID file and verifies the process is alive.
-// Note: The file lock in Run() is the authoritative mechanism for preventing
-// duplicate daemons. This function is for status checks and cleanup.
+// Uses the daemon.lock flock as the authoritative signal — if the lock is held,
+// the daemon is running. Falls back to PID file for the process ID.
+// This avoids fragile ps string matching for process identity (ZFC fix: gt-utuk).
 func IsRunning(townRoot string) (bool, int, error) {
+	// Primary check: is the daemon lock held?
+	lockPath := filepath.Join(townRoot, "daemon", "daemon.lock")
+	if _, err := os.Stat(lockPath); os.IsNotExist(err) {
+		return false, 0, nil
+	}
+
+	lock := flock.New(lockPath)
+	locked, err := lock.TryLock()
+	if err != nil {
+		// Can't check lock — fall back to PID file + signal check
+		return isRunningFromPID(townRoot)
+	}
+
+	if locked {
+		// We acquired the lock, so no daemon holds it
+		_ = lock.Unlock()
+		// Clean up stale PID file if present
+		pidFile := filepath.Join(townRoot, "daemon", "daemon.pid")
+		_ = os.Remove(pidFile)
+		return false, 0, nil
+	}
+
+	// Lock is held — daemon is running. Read PID from file.
+	pidFile := filepath.Join(townRoot, "daemon", "daemon.pid")
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		// Lock held but no PID file — daemon is running but we can't report PID
+		return true, 0, nil
+	}
+
+	pidStr := strings.TrimSpace(string(data))
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		return true, 0, nil
+	}
+
+	return true, pid, nil
+}
+
+// isRunningFromPID is the fallback when flock check fails. Uses PID file + signal.
+func isRunningFromPID(townRoot string) (bool, int, error) {
 	pidFile := filepath.Join(townRoot, "daemon", "daemon.pid")
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, 0, nil
 		}
-		// Return error for other failures (permissions, I/O)
 		return false, 0, fmt.Errorf("reading PID file: %w", err)
 	}
 
 	pidStr := strings.TrimSpace(string(data))
 	pid, err := strconv.Atoi(pidStr)
 	if err != nil {
-		// Corrupted PID file - return error, not silent false
 		return false, 0, fmt.Errorf("invalid PID in file %q: %w", pidStr, err)
 	}
 
-	// Check if process is alive
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		return false, 0, nil
 	}
 
-	// On Unix, FindProcess always succeeds. Send signal 0 to check if alive.
 	if err := process.Signal(syscall.Signal(0)); err != nil {
-		// Process not running, clean up stale PID file
-		if err := os.Remove(pidFile); err == nil {
-			// Successfully cleaned up stale file
-			return false, 0, fmt.Errorf("removed stale PID file (process %d not found)", pid)
-		}
-		return false, 0, nil
-	}
-
-	// CRITICAL: Verify it's actually our daemon, not PID reuse
-	if !isGasTownDaemon(pid) {
-		// PID reused by different process
-		if err := os.Remove(pidFile); err == nil {
-			return false, 0, fmt.Errorf("removed stale PID file (PID %d is not gt daemon)", pid)
-		}
+		_ = os.Remove(pidFile)
 		return false, 0, nil
 	}
 
@@ -1569,8 +1593,9 @@ func IsRunning(townRoot string) (bool, int, error) {
 // isGasTownDaemon checks if a PID is actually a gt daemon run process.
 // This prevents false positives from PID reuse.
 // Uses ps command for cross-platform compatibility (Linux, macOS).
+// Note: This remains for FindOrphanedDaemons which discovers unknown processes
+// where no lock file identity is available. IsRunning uses flock instead.
 func isGasTownDaemon(pid int) bool {
-	// Use ps to get command for the PID (works on Linux and macOS)
 	cmd := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "command=")
 	output, err := cmd.Output()
 	if err != nil {
@@ -1578,8 +1603,6 @@ func isGasTownDaemon(pid int) bool {
 	}
 
 	cmdline := strings.TrimSpace(string(output))
-
-	// Check if it's "gt daemon run" or "/path/to/gt daemon run"
 	return strings.Contains(cmdline, "gt") && strings.Contains(cmdline, "daemon") && strings.Contains(cmdline, "run")
 }
 

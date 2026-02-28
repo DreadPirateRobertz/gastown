@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -326,8 +327,9 @@ func (m *DoltServerManager) isRunning() (int, bool) {
 		return 0, false
 	}
 
-	// Verify it's actually dolt sql-server
-	if !isDoltSqlServer(pid) {
+	// Verify it's actually our dolt server by checking port connectivity.
+	// More reliable than ps string matching (ZFC fix: gt-utuk).
+	if !m.isDoltServerOnPort() {
 		_ = os.Remove(m.pidFile())
 		return 0, false
 	}
@@ -336,18 +338,16 @@ func (m *DoltServerManager) isRunning() (int, bool) {
 	return pid, true
 }
 
-// isDoltSqlServer checks if a PID is actually a dolt sql-server process.
-func isDoltSqlServer(pid int) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "ps", "-p", strconv.Itoa(pid), "-o", "command=")
-	output, err := cmd.Output()
+// isDoltServerOnPort checks if the configured dolt port is accepting connections.
+// More reliable than ps string matching for process identity verification.
+func (m *DoltServerManager) isDoltServerOnPort() bool {
+	addr := net.JoinHostPort(m.config.Host, strconv.Itoa(m.config.Port))
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		return false
 	}
-
-	cmdline := strings.TrimSpace(string(output))
-	return strings.Contains(cmdline, "dolt") && strings.Contains(cmdline, "sql-server")
+	conn.Close()
+	return true
 }
 
 // EnsureRunning ensures the Dolt server is running.
