@@ -728,8 +728,17 @@ func checkSingleConvoy(townBeads, convoyID string, dryRun bool) error {
 	if err != nil {
 		return fmt.Errorf("checking convoy %s: %w", convoyID, err)
 	}
-	// A convoy with 0 tracked issues is definitionally complete
-	// (tracking deps were likely lost). Treat as all-closed.
+
+	// A convoy with 0 tracked issues should NOT be auto-closed.
+	// An empty dep list is more likely a transient read error (Dolt snapshot,
+	// bd dep list returning []) than actual loss of tracking deps. Closing
+	// on empty risks premature closure of convoys with in_progress issues
+	// whose deps are momentarily unreadable.
+	if len(tracked) == 0 {
+		fmt.Printf("%s Convoy %s has 0 tracked issues — skipping auto-close (may be transient)\n", style.Dim.Render("○"), convoyID)
+		return nil
+	}
+
 	allClosed := true
 	openCount := 0
 	for _, t := range tracked {
@@ -744,7 +753,7 @@ func checkSingleConvoy(townBeads, convoyID string, dryRun bool) error {
 		return nil
 	}
 
-	// All tracked issues are complete (or convoy is empty) - close the convoy
+	// All tracked issues are complete - close the convoy
 	if dryRun {
 		fmt.Printf("%s Would auto-close convoy 🚚 %s: %s\n", style.Warning.Render("⚠"), convoyID, convoy.Title)
 		return nil
@@ -752,9 +761,6 @@ func checkSingleConvoy(townBeads, convoyID string, dryRun bool) error {
 
 	// Actually close the convoy
 	reason := "All tracked issues completed"
-	if len(tracked) == 0 {
-		reason = "Empty convoy (0 tracked issues) — auto-closed as definitionally complete"
-	}
 	closeArgs := []string{"close", convoyID, "-r", reason}
 	closeCmd := exec.Command("bd", closeArgs...)
 	closeCmd.Dir = townBeads
@@ -1272,15 +1278,10 @@ func findStrandedConvoys(townBeads string) ([]strandedConvoyInfo, error) {
 			style.PrintWarning("skipping convoy %s: %v", convoy.ID, err)
 			continue
 		}
-		// Empty convoys (0 tracked issues) are stranded — they need
-		// attention (auto-close via convoy check or manual cleanup).
+		// Skip convoys with 0 tracked issues — an empty dep list may be
+		// transient. Don't classify as stranded; the convoy will be
+		// re-evaluated on the next scan cycle.
 		if len(tracked) == 0 {
-			stranded = append(stranded, strandedConvoyInfo{
-				ID:          convoy.ID,
-				Title:       convoy.Title,
-				ReadyCount:  0,
-				ReadyIssues: []string{},
-			})
 			continue
 		}
 
@@ -1425,8 +1426,12 @@ func checkAndCloseCompletedConvoys(townBeads string, dryRun bool) ([]struct{ ID,
 			style.PrintWarning("skipping convoy %s: %v", convoy.ID, err)
 			continue
 		}
-		// A convoy with 0 tracked issues is definitionally complete
-		// (tracking deps were likely lost). Close it.
+		// Skip convoys with 0 tracked issues — an empty dep list may be
+		// transient (Dolt snapshot, bd dep list error). Closing on empty
+		// risks premature closure of convoys with active in_progress work.
+		if len(tracked) == 0 {
+			continue
+		}
 		allClosed := true
 		for _, t := range tracked {
 			if t.Status != "closed" && t.Status != "tombstone" {
@@ -1444,9 +1449,6 @@ func checkAndCloseCompletedConvoys(townBeads string, dryRun bool) ([]struct{ ID,
 
 			// Close the convoy
 			reason := "All tracked issues completed"
-			if len(tracked) == 0 {
-				reason = "Empty convoy (0 tracked issues) — auto-closed as definitionally complete"
-			}
 			closeArgs := []string{"close", convoy.ID, "-r", reason}
 			closeCmd := exec.Command("bd", closeArgs...)
 			closeCmd.Dir = townBeads

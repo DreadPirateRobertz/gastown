@@ -81,7 +81,10 @@ esac
 	return binDir, townBeads, closeLogPath
 }
 
-func TestCheckSingleConvoy_EmptyConvoyAutoCloses(t *testing.T) {
+// TestCheckSingleConvoy_EmptyConvoySkipsClose verifies that a convoy with 0
+// tracked issues is NOT auto-closed. An empty dep list may be transient (Dolt
+// snapshot issue), so closing on empty risks premature closure.
+func TestCheckSingleConvoy_EmptyConvoySkipsClose(t *testing.T) {
 	_, townBeads, closeLogPath := mockBdForConvoyTest(t, "hq-empty1", "Empty test convoy")
 
 	err := checkSingleConvoy(townBeads, "hq-empty1", false)
@@ -89,17 +92,9 @@ func TestCheckSingleConvoy_EmptyConvoyAutoCloses(t *testing.T) {
 		t.Fatalf("checkSingleConvoy() error: %v", err)
 	}
 
-	// Verify bd close was called with the empty-convoy reason
-	data, err := os.ReadFile(closeLogPath)
-	if err != nil {
-		t.Fatalf("reading close log: %v", err)
-	}
-	log := string(data)
-	if !strings.Contains(log, "hq-empty1") {
-		t.Errorf("close log should contain convoy ID, got: %q", log)
-	}
-	if !strings.Contains(log, "Empty convoy") {
-		t.Errorf("close log should contain empty-convoy reason, got: %q", log)
+	// Verify bd close was NOT called — empty convoys should be skipped
+	if _, err := os.ReadFile(closeLogPath); err == nil {
+		t.Error("bd close should NOT be called for empty convoys, but close log exists")
 	}
 }
 
@@ -118,7 +113,9 @@ func TestCheckSingleConvoy_EmptyConvoyDryRun(t *testing.T) {
 	}
 }
 
-func TestFindStrandedConvoys_EmptyConvoyFlagged(t *testing.T) {
+// TestFindStrandedConvoys_EmptyConvoyNotFlagged verifies that convoys with 0
+// tracked issues are NOT flagged as stranded. An empty dep list may be transient.
+func TestFindStrandedConvoys_EmptyConvoyNotFlagged(t *testing.T) {
 	_, townBeads, _ := mockBdForConvoyTest(t, "hq-empty3", "Stranded empty convoy")
 
 	stranded, err := findStrandedConvoys(townBeads)
@@ -126,25 +123,14 @@ func TestFindStrandedConvoys_EmptyConvoyFlagged(t *testing.T) {
 		t.Fatalf("findStrandedConvoys() error: %v", err)
 	}
 
-	if len(stranded) != 1 {
-		t.Fatalf("expected 1 stranded convoy, got %d", len(stranded))
-	}
-
-	s := stranded[0]
-	if s.ID != "hq-empty3" {
-		t.Errorf("stranded convoy ID = %q, want %q", s.ID, "hq-empty3")
-	}
-	if s.ReadyCount != 0 {
-		t.Errorf("stranded ReadyCount = %d, want 0", s.ReadyCount)
-	}
-	if len(s.ReadyIssues) != 0 {
-		t.Errorf("stranded ReadyIssues = %v, want empty", s.ReadyIssues)
+	// Empty convoys should NOT appear in stranded results
+	if len(stranded) != 0 {
+		t.Fatalf("expected 0 stranded convoys (empty convoys skipped), got %d", len(stranded))
 	}
 }
 
 // TestFindStrandedConvoys_MixedConvoys verifies that findStrandedConvoys
-// correctly returns both empty (cleanup) and feedable (has ready issues)
-// convoys, and that the JSON output shape is correct for each type.
+// correctly returns feedable convoys (has ready issues) but skips empty ones.
 func TestFindStrandedConvoys_MixedConvoys(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping convoy test on Windows")
@@ -215,32 +201,15 @@ esac
 		t.Fatalf("findStrandedConvoys() error: %v", err)
 	}
 
-	if len(stranded) != 2 {
-		t.Fatalf("expected 2 stranded convoys, got %d", len(stranded))
-	}
-
-	// Build a map for easier assertions
-	byID := map[string]strandedConvoyInfo{}
-	for _, s := range stranded {
-		byID[s.ID] = s
-	}
-
-	// Verify empty convoy
-	empty, ok := byID["hq-empty-mix"]
-	if !ok {
-		t.Fatal("missing empty convoy hq-empty-mix in stranded results")
-	}
-	if empty.ReadyCount != 0 {
-		t.Errorf("empty convoy ReadyCount = %d, want 0", empty.ReadyCount)
-	}
-	if len(empty.ReadyIssues) != 0 {
-		t.Errorf("empty convoy ReadyIssues = %v, want empty", empty.ReadyIssues)
+	// Only the feedable convoy should appear — empty convoy is skipped
+	if len(stranded) != 1 {
+		t.Fatalf("expected 1 stranded convoy (empty skipped), got %d", len(stranded))
 	}
 
 	// Verify feedable convoy
-	feedable, ok := byID["hq-feed-mix"]
-	if !ok {
-		t.Fatal("missing feedable convoy hq-feed-mix in stranded results")
+	feedable := stranded[0]
+	if feedable.ID != "hq-feed-mix" {
+		t.Errorf("stranded convoy ID = %q, want %q", feedable.ID, "hq-feed-mix")
 	}
 	if feedable.ReadyCount != 1 {
 		t.Errorf("feedable convoy ReadyCount = %d, want 1", feedable.ReadyCount)
