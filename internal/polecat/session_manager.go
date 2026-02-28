@@ -322,6 +322,10 @@ func (m *SessionManager) Start(polecat string, opts SessionStartOptions) error {
 		return fmt.Errorf("creating session: %w", err)
 	}
 
+	// Bootstrap heartbeat so isSessionProcessDead sees a fresh heartbeat
+	// before the agent's first gt command runs (ZFC: gt-qjtq).
+	_ = session.TouchHeartbeat(townRoot, sessionID)
+
 	// Set environment (non-fatal: session works without these)
 	// Use centralized AgentEnv for consistency across all role startup paths
 	// Note: townRoot already defined above for ResolveRoleAgentConfig
@@ -455,12 +459,12 @@ func (m *SessionManager) Start(polecat string, opts SessionStartOptions) error {
 	return nil
 }
 
-// isSessionStale checks if a tmux session's pane process has died.
-// A stale session exists in tmux but its main process (the agent) is no longer running.
-// This happens when the agent crashes during startup but tmux keeps the dead pane.
-// Delegates to isSessionProcessDead to avoid duplicating process-check logic (gt-qgzj1h).
+// isSessionStale checks if a tmux session's agent has stopped.
+// A stale session exists in tmux but the agent is no longer active.
+// Uses heartbeat staleness (ZFC: gt-qjtq) with PID fallback for pre-heartbeat sessions.
 func (m *SessionManager) isSessionStale(sessionID string) bool {
-	return isSessionProcessDead(m.tmux, sessionID)
+	townRoot := filepath.Dir(m.rig.Path)
+	return isSessionProcessDead(m.tmux, sessionID, townRoot)
 }
 
 // Stop terminates a polecat session.
@@ -486,6 +490,10 @@ func (m *SessionManager) Stop(polecat string, force bool) error {
 	if err := m.tmux.KillSessionWithProcesses(sessionID); err != nil {
 		return fmt.Errorf("killing session: %w", err)
 	}
+
+	// Clean up heartbeat file (ZFC: gt-qjtq).
+	townRoot := filepath.Dir(m.rig.Path)
+	session.CleanupHeartbeat(townRoot, sessionID)
 
 	return nil
 }
