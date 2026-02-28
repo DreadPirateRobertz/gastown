@@ -754,12 +754,12 @@ func InstantiateFormulaOnBead(formulaName, beadID, title, hookWorkDir, townRoot 
 
 	// Step 2: Create wisp with feature and issue variables from bead.
 	// Use resolvedFormula which may be a temp file path if the embedded fallback was used.
-	// Root-only: don't materialize child step wisps — agents read inline steps from embedded formula.
+	// Wisps are ephemeral — agents read inline steps from embedded formula at prime time.
 	wispArgs := []string{"mol", "wisp", resolvedFormula, "--var", featureVar, "--var", issueVar}
 	for _, variable := range extraVars {
 		wispArgs = append(wispArgs, "--var", variable)
 	}
-	wispArgs = append(wispArgs, "--root-only", "--json")
+	wispArgs = append(wispArgs, "--json")
 	wispOut, err := BdCmd(wispArgs...).
 		Dir(formulaWorkDir).
 		WithAutoCommit().

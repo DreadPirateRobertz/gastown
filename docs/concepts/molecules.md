@@ -12,10 +12,10 @@ Protomolecule (frozen template) ─── Solid
     │
     ├─▶ bd mol pour ──▶ Mol (persistent) ─── Liquid
     │
-    └─▶ bd mol wisp --root-only ──▶ Root Wisp (ephemeral) ─── Vapor
+    └─▶ bd mol wisp ──▶ Wisp (ephemeral) ─── Vapor
 ```
 
-**Root-only wisps**: Formula steps are NOT materialized as database rows. Only a
+**Wisps**: Formula steps are NOT materialized as database rows. Only a
 single root wisp is created. Agents read steps inline from the embedded formula
 at prime time. This prevents wisp accumulation (~6,000+ rows/day → ~400/day).
 
