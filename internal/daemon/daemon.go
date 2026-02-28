@@ -1546,20 +1546,18 @@ func IsRunning(townRoot string) (bool, int, error) {
 
 	// On Unix, FindProcess always succeeds. Send signal 0 to check if alive.
 	if err := process.Signal(syscall.Signal(0)); err != nil {
-		// Process not running, clean up stale PID file
-		if err := os.Remove(pidFile); err == nil {
-			// Successfully cleaned up stale file
-			return false, 0, fmt.Errorf("removed stale PID file (process %d not found)", pid)
-		}
+		// Process not running, clean up stale PID file.
+		// This is a successful recovery, not an error — the caller can
+		// proceed as if no daemon is running (fixes #2107).
+		os.Remove(pidFile) // best-effort cleanup
 		return false, 0, nil
 	}
 
 	// CRITICAL: Verify it's actually our daemon, not PID reuse
 	if !isGasTownDaemon(pid) {
-		// PID reused by different process
-		if err := os.Remove(pidFile); err == nil {
-			return false, 0, fmt.Errorf("removed stale PID file (PID %d is not gt daemon)", pid)
-		}
+		// PID reused by different process — clean up stale PID file.
+		os.Remove(pidFile) // best-effort cleanup
+		return false, 0, nil
 		return false, 0, nil
 	}
 
