@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/runtime"
@@ -183,6 +184,11 @@ func (m *Manager) Start(agentOverride string) error {
 		// Non-fatal: Deacon still works, just won't auto-respawn on crash
 		// Daemon will still restart it, but with a delay
 		fmt.Printf("warning: failed to set auto-respawn hook for deacon: %v\n", err)
+	}
+
+	// Pre-accept workspace trust in ~/.claude.json (more reliable than tmux screen-scraping).
+	if runtimeConfig.Command == "claude" || runtimeConfig.Command == "" {
+		_ = claude.PreAcceptWorkspaceTrust(deaconDir)
 	}
 
 	// Accept startup dialogs (workspace trust + bypass permissions) if they appear.

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/runtime"
@@ -155,6 +156,18 @@ func StartSession(t *tmux.Tmux, cfg SessionConfig) (_ *StartResult, retErr error
 	}
 	if err := runtime.EnsureSettingsForRole(settingsDir, cfg.WorkDir, cfg.Role, runtimeConfig); err != nil {
 		return nil, fmt.Errorf("ensuring runtime settings: %w", err)
+	}
+
+	// 2b. Pre-accept workspace trust for Claude Code.
+	// Claude Code v2.1.55+ shows a "Quick safety check" trust dialog on first
+	// launch in a workspace. Writing hasTrustDialogAccepted=true in ~/.claude.json
+	// before launch suppresses this dialog entirely, which is more reliable than
+	// the tmux screen-scraping fallback in AcceptWorkspaceTrustDialog.
+	if runtimeConfig.Command == "claude" || runtimeConfig.Command == "" {
+		if err := claude.PreAcceptWorkspaceTrust(cfg.WorkDir); err != nil {
+			// Non-fatal: the tmux-based fallback in AcceptStartupDialogs will handle it.
+			fmt.Fprintf(os.Stderr, "Warning: failed to pre-accept workspace trust for %s: %v\n", cfg.WorkDir, err)
+		}
 	}
 
 	// 3. Build startup command if not provided.

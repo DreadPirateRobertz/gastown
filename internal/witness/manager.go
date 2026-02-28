@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/runtime"
 	"github.com/steveyegge/gastown/internal/constants"
@@ -203,6 +204,11 @@ func (m *Manager) Start(foreground bool, agentOverride string, envOverrides []st
 		// Kill the zombie session before returning error
 		_ = t.KillSessionWithProcesses(sessionID)
 		return fmt.Errorf("waiting for witness to start: %w", err)
+	}
+
+	// Pre-accept workspace trust in ~/.claude.json (more reliable than tmux screen-scraping).
+	if runtimeConfig.Command == "claude" || runtimeConfig.Command == "" {
+		_ = claude.PreAcceptWorkspaceTrust(witnessDir)
 	}
 
 	// Accept startup dialogs (workspace trust + bypass permissions) if they appear.

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/mail"
@@ -200,6 +201,11 @@ func (m *Manager) Start(foreground bool, agentOverride string) error {
 	// Apply theme (non-fatal: theming failure doesn't affect operation)
 	theme := tmux.AssignTheme(m.rig.Name)
 	_ = t.ConfigureGasTownSession(sessionID, theme, m.rig.Name, "refinery", "refinery")
+
+	// Pre-accept workspace trust in ~/.claude.json (more reliable than tmux screen-scraping).
+	if runtimeConfig.Command == "claude" || runtimeConfig.Command == "" {
+		_ = claude.PreAcceptWorkspaceTrust(refineryRigDir)
+	}
 
 	// Accept startup dialogs (workspace trust + bypass permissions) if they appear.
 	// Must be before WaitForRuntimeReady to avoid race where dialog blocks prompt detection.

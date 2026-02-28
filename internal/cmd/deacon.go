@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/deacon"
@@ -554,6 +555,11 @@ func startDeaconSession(t *tmux.Tmux, sessionName, agentOverride string) error {
 	// Wait for Claude to start
 	if err := t.WaitForCommand(sessionName, constants.SupportedShells, constants.ClaudeStartTimeout); err != nil {
 		return fmt.Errorf("waiting for deacon to start: %w", err)
+	}
+
+	// Pre-accept workspace trust in ~/.claude.json (more reliable than tmux screen-scraping).
+	if runtimeConfig.Command == "claude" || runtimeConfig.Command == "" {
+		_ = claude.PreAcceptWorkspaceTrust(deaconDir)
 	}
 
 	// Accept startup dialogs (workspace trust + bypass permissions) if they appear.

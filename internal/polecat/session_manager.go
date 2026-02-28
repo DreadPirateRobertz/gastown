@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/git"
@@ -383,6 +384,11 @@ func (m *SessionManager) Start(polecat string, opts SessionStartOptions) error {
 
 	// Wait for Claude to start (non-fatal)
 	debugSession("WaitForCommand", m.tmux.WaitForCommand(sessionID, constants.SupportedShells, constants.ClaudeStartTimeout))
+
+	// Pre-accept workspace trust in ~/.claude.json (more reliable than tmux screen-scraping).
+	if runtimeConfig.Command == "claude" || runtimeConfig.Command == "" {
+		_ = claude.PreAcceptWorkspaceTrust(workDir)
+	}
 
 	// Accept startup dialogs (workspace trust + bypass permissions) if they appear
 	debugSession("AcceptStartupDialogs", m.tmux.AcceptStartupDialogs(sessionID))

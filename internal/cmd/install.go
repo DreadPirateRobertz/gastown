@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/claude"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/deps"
@@ -458,6 +459,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		} else {
 			fmt.Printf("   ✓ %s\n", msg)
 		}
+	}
+
+	// Pre-accept workspace trust for the town root directory.
+	// Claude Code walks parent directories for trust, so trusting the town root
+	// covers all subdirectories (rig dirs, polecats, witness, refinery, etc.).
+	if err := claude.PreAcceptWorkspaceTrust(absPath); err != nil {
+		fmt.Printf("   %s Could not pre-accept workspace trust: %v\n", style.Dim.Render("⚠"), err)
+	} else {
+		fmt.Printf("   ✓ Pre-accepted Claude workspace trust for %s\n", absPath)
 	}
 
 	fmt.Printf("\n%s HQ created successfully!\n", style.Bold.Render("✓"))
