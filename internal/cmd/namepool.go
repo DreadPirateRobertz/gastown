@@ -453,6 +453,12 @@ func runNamepoolDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Check if any rigs are using this theme and warn
+	if using := polecat.FindRigsUsingTheme(townRoot, themeName); len(using) > 0 {
+		fmt.Fprintf(os.Stderr, "warning: theme '%s' is currently used by: %s\n", themeName, strings.Join(using, ", "))
+		fmt.Fprintf(os.Stderr, "  Those rigs will fall back to the default theme (%s).\n", polecat.DefaultTheme)
+	}
+
 	if err := polecat.DeleteCustomTheme(townRoot, themeName); err != nil {
 		return err
 	}

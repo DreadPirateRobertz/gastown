@@ -609,6 +609,46 @@ func DeleteCustomTheme(townRoot, name string) error {
 	return os.Remove(path)
 }
 
+// FindRigsUsingTheme checks all rigs in a town and returns the names of any
+// rigs whose namepool style matches the given theme name.
+func FindRigsUsingTheme(townRoot, theme string) []string {
+	rigsFile := filepath.Join(townRoot, "mayor", "rigs.json")
+	data, err := os.ReadFile(rigsFile)
+	if err != nil {
+		return nil
+	}
+
+	// Minimal parse — just need rig names from the "rigs" map keys.
+	var registry struct {
+		Rigs map[string]json.RawMessage `json:"rigs"`
+	}
+	if err := json.Unmarshal(data, &registry); err != nil {
+		return nil
+	}
+
+	var using []string
+	for rigName := range registry.Rigs {
+		settingsPath := filepath.Join(townRoot, rigName, "settings", "config.json")
+		sdata, err := os.ReadFile(settingsPath)
+		if err != nil {
+			continue
+		}
+		var settings struct {
+			Namepool *struct {
+				Style string `json:"style"`
+			} `json:"namepool"`
+		}
+		if err := json.Unmarshal(sdata, &settings); err != nil {
+			continue
+		}
+		if settings.Namepool != nil && settings.Namepool.Style == theme {
+			using = append(using, rigName)
+		}
+	}
+	sort.Strings(using)
+	return using
+}
+
 // AddCustomName adds a custom name to the pool.
 func (p *NamePool) AddCustomName(name string) {
 	p.mu.Lock()

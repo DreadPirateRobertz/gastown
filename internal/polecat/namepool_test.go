@@ -921,6 +921,60 @@ func TestDeleteCustomTheme_BuiltinRefused(t *testing.T) {
 	}
 }
 
+func TestFindRigsUsingTheme(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "namepool-findrig-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	// Create mayor/rigs.json with two rigs
+	mayorDir := filepath.Join(tmpDir, "mayor")
+	if err := os.MkdirAll(mayorDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	rigsJSON := `{"version":1,"rigs":{"rig-alpha":{},"rig-beta":{}}}`
+	if err := os.WriteFile(filepath.Join(mayorDir, "rigs.json"), []byte(rigsJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// rig-alpha uses "tolkien" theme
+	alphaSettings := filepath.Join(tmpDir, "rig-alpha", "settings")
+	if err := os.MkdirAll(alphaSettings, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(alphaSettings, "config.json"), []byte(`{"namepool":{"style":"tolkien"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// rig-beta uses "mad-max" theme
+	betaSettings := filepath.Join(tmpDir, "rig-beta", "settings")
+	if err := os.MkdirAll(betaSettings, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(betaSettings, "config.json"), []byte(`{"namepool":{"style":"mad-max"}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should find rig-alpha using tolkien
+	using := FindRigsUsingTheme(tmpDir, "tolkien")
+	if len(using) != 1 || using[0] != "rig-alpha" {
+		t.Errorf("expected [rig-alpha], got %v", using)
+	}
+
+	// Should find rig-beta using mad-max
+	using = FindRigsUsingTheme(tmpDir, "mad-max")
+	if len(using) != 1 || using[0] != "rig-beta" {
+		t.Errorf("expected [rig-beta], got %v", using)
+	}
+
+	// Should find nothing for unused theme
+	using = FindRigsUsingTheme(tmpDir, "unused-theme")
+	if len(using) != 0 {
+		t.Errorf("expected empty, got %v", using)
+	}
+}
+
 func TestDeleteCustomTheme_NotFound(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "namepool-delete-*")
 	if err != nil {
