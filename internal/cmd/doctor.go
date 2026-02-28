@@ -181,7 +181,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	d.Register(doctor.NewMalformedSessionNameCheck())
 	d.Register(doctor.NewOrphanSessionCheck())
 	d.Register(doctor.NewZombieSessionCheck())
-	d.Register(doctor.NewCrossSocketZombieCheck())
+
 	d.Register(doctor.NewOrphanProcessCheck())
 	d.Register(doctor.NewWispGCCheck())
 	d.Register(doctor.NewCheckMisclassifiedWisps())
