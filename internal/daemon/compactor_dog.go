@@ -11,9 +11,10 @@ import (
 
 const (
 	defaultCompactorDogInterval = 24 * time.Hour
-	// compactorCommitThreshold is the minimum commit count before compaction triggers.
-	// HQ generates ~6k commits/day, so 10k is roughly 1.5 days of headroom.
-	compactorCommitThreshold = 10000
+	// defaultCompactorCommitThreshold is the minimum commit count before compaction triggers.
+	// 500 commits is a reasonable daily threshold — prevents unbounded growth
+	// without compacting too aggressively. Configurable via daemon.json.
+	defaultCompactorCommitThreshold = 500
 	// compactorQueryTimeout is the timeout for individual SQL queries during compaction.
 	compactorQueryTimeout = 30 * time.Second
 	// compactorBranchName is the temporary branch used during compaction.
@@ -22,8 +23,14 @@ const (
 
 // CompactorDogConfig holds configuration for the compactor_dog patrol.
 type CompactorDogConfig struct {
-	Enabled     bool   `json:"enabled"`
-	IntervalStr string `json:"interval,omitempty"`
+	Enabled     bool     `json:"enabled"`
+	IntervalStr string   `json:"interval,omitempty"`
+	// Threshold is the minimum commit count before compaction triggers.
+	// Defaults to 500 if not set.
+	Threshold int `json:"threshold,omitempty"`
+	// Databases lists specific database names to compact.
+	// If empty, falls back to wisp_reaper config, then auto-discovery.
+	Databases []string `json:"databases,omitempty"`
 }
 
 // compactorDogInterval returns the configured interval, or the default (24h).
@@ -36,6 +43,16 @@ func compactorDogInterval(config *DaemonPatrolConfig) time.Duration {
 		}
 	}
 	return defaultCompactorDogInterval
+}
+
+// compactorDogThreshold returns the configured commit threshold, or the default (500).
+func compactorDogThreshold(config *DaemonPatrolConfig) int {
+	if config != nil && config.Patrols != nil && config.Patrols.CompactorDog != nil {
+		if config.Patrols.CompactorDog.Threshold > 0 {
+			return config.Patrols.CompactorDog.Threshold
+		}
+	}
+	return defaultCompactorCommitThreshold
 }
 
 // runCompactorDog checks each production database's commit count and
@@ -55,7 +72,8 @@ func (d *Daemon) runCompactorDog() {
 		return
 	}
 
-	d.logger.Printf("compactor_dog: starting compaction cycle")
+	threshold := compactorDogThreshold(d.patrolConfig)
+	d.logger.Printf("compactor_dog: starting compaction cycle (threshold=%d)", threshold)
 
 	mol := d.pourDogMolecule("mol-dog-compactor", nil)
 	defer mol.close()
@@ -79,15 +97,15 @@ func (d *Daemon) runCompactorDog() {
 			continue
 		}
 
-		if commitCount < compactorCommitThreshold {
+		if commitCount < threshold {
 			d.logger.Printf("compactor_dog: %s: %d commits (below threshold %d), skipping",
-				dbName, commitCount, compactorCommitThreshold)
+				dbName, commitCount, threshold)
 			skipped++
 			continue
 		}
 
 		d.logger.Printf("compactor_dog: %s: %d commits (threshold %d) — compacting",
-			dbName, commitCount, compactorCommitThreshold)
+			dbName, commitCount, threshold)
 
 		if err := d.compactDatabase(dbName); err != nil {
 			d.logger.Printf("compactor_dog: %s: compaction FAILED: %v", dbName, err)
@@ -110,11 +128,18 @@ func (d *Daemon) runCompactorDog() {
 }
 
 // compactorDatabases returns the list of databases to consider for compaction.
-// Uses the wisp_reaper config if available, otherwise defaults.
+// Checks its own config first, falls back to wisp_reaper config, then auto-discovery.
 func (d *Daemon) compactorDatabases() []string {
-	if d.patrolConfig != nil && d.patrolConfig.Patrols != nil && d.patrolConfig.Patrols.WispReaper != nil {
-		if dbs := d.patrolConfig.Patrols.WispReaper.Databases; len(dbs) > 0 {
-			return dbs
+	if d.patrolConfig != nil && d.patrolConfig.Patrols != nil {
+		if cd := d.patrolConfig.Patrols.CompactorDog; cd != nil {
+			if len(cd.Databases) > 0 {
+				return cd.Databases
+			}
+		}
+		if d.patrolConfig.Patrols.WispReaper != nil {
+			if dbs := d.patrolConfig.Patrols.WispReaper.Databases; len(dbs) > 0 {
+				return dbs
+			}
 		}
 	}
 	return d.discoverDoltDatabases()
