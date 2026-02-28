@@ -617,8 +617,8 @@ func upStartWitness(rigName string, r *rig.Rig) agentStartResult {
 	name := "Witness (" + rigName + ")"
 
 	// Check if rig is parked or docked (wisp + bead labels).
-	// Skip the check if auto_start_on_boot is set — that overrides dock status.
-	if !r.GetBoolConfig("auto_start_on_boot") {
+	// Skip the check if auto_start_on_up is set — that overrides dock status.
+	if !r.GetBoolConfig("auto_start_on_up") && !r.GetBoolConfig("auto_start_on_boot") {
 		townRoot := filepath.Dir(r.Path)
 		if blocked, reason := IsRigParkedOrDocked(townRoot, rigName); blocked {
 			return agentStartResult{name: name, ok: true, detail: fmt.Sprintf("skipped (rig %s)", reason)}
@@ -641,8 +641,8 @@ func upStartRefinery(rigName string, r *rig.Rig) agentStartResult {
 	name := "Refinery (" + rigName + ")"
 
 	// Check if rig is parked or docked (wisp + bead labels).
-	// Skip the check if auto_start_on_boot is set — that overrides dock status.
-	if !r.GetBoolConfig("auto_start_on_boot") {
+	// Skip the check if auto_start_on_up is set — that overrides dock status.
+	if !r.GetBoolConfig("auto_start_on_up") && !r.GetBoolConfig("auto_start_on_boot") {
 		townRoot := filepath.Dir(r.Path)
 		if blocked, reason := IsRigParkedOrDocked(townRoot, rigName); blocked {
 			return agentStartResult{name: name, ok: true, detail: fmt.Sprintf("skipped (rig %s)", reason)}

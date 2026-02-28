@@ -1544,7 +1544,7 @@ func detectWarnings(dag *ConvoyDAG, input *StageInput) []StagingFinding {
 	var findings []StagingFinding
 
 	findings = append(findings, detectOrphans(dag, input)...)
-	findings = append(findings, detectParkedRigs(dag)...)
+	findings = append(findings, detectBlockedRigs(dag)...)
 	findings = append(findings, detectCrossRig(dag)...)
 	findings = append(findings, estimateCapacity(dag)...)
 	findings = append(findings, detectMissingBranches(dag)...)
@@ -1609,23 +1609,27 @@ func detectOrphans(dag *ConvoyDAG, input *StageInput) []StagingFinding {
 	return findings
 }
 
-// isRigParkedFn is a seam for tests. Production uses IsRigParked.
-var isRigParkedFn = func(townRoot, rigName string) bool {
-	return IsRigParked(townRoot, rigName)
+// isRigBlockedFn is a seam for tests. Production uses IsRigParkedOrDocked.
+var isRigBlockedFn = func(townRoot, rigName string) (bool, string) {
+	return IsRigParkedOrDocked(townRoot, rigName)
 }
 
-// detectParkedRigs warns about slingable nodes whose target rig is parked
-// in the wisp layer (gt-4owfd.1). This uses the actual IsRigParked() check
-// rather than string matching on rig names.
-func detectParkedRigs(dag *ConvoyDAG) []StagingFinding {
+// detectBlockedRigs warns about slingable nodes whose target rig is parked
+// or docked (gt-4owfd.1, #2120). Uses IsRigParkedOrDocked which checks both
+// wisp ephemeral state and persistent bead labels.
+func detectBlockedRigs(dag *ConvoyDAG) []StagingFinding {
 	townRoot, err := workspace.FindFromCwd()
 	if err != nil {
-		// Can't resolve town root — skip parked rig detection
+		// Can't resolve town root — skip blocked rig detection
 		return nil
 	}
 
-	// Group beads by parked rig to consolidate warnings
-	parkedRigBeads := make(map[string][]string)
+	// Group beads by blocked rig to consolidate warnings
+	type blockedInfo struct {
+		reason  string
+		beadIDs []string
+	}
+	blockedRigs := make(map[string]*blockedInfo)
 	for _, node := range dag.Nodes {
 		if !isSlingableType(node.Type) {
 			continue
@@ -1633,29 +1637,36 @@ func detectParkedRigs(dag *ConvoyDAG) []StagingFinding {
 		if node.Rig == "" {
 			continue // already caught by no-rig errors
 		}
-		if isRigParkedFn(townRoot, node.Rig) {
-			parkedRigBeads[node.Rig] = append(parkedRigBeads[node.Rig], node.ID)
+		if blocked, reason := isRigBlockedFn(townRoot, node.Rig); blocked {
+			if info, ok := blockedRigs[node.Rig]; ok {
+				info.beadIDs = append(info.beadIDs, node.ID)
+			} else {
+				blockedRigs[node.Rig] = &blockedInfo{reason: reason, beadIDs: []string{node.ID}}
+			}
 		}
 	}
 
-	// Sort rig names for deterministic output with multiple parked rigs
-	rigNames := make([]string, 0, len(parkedRigBeads))
-	for rigName := range parkedRigBeads {
+	// Sort rig names for deterministic output with multiple blocked rigs
+	rigNames := make([]string, 0, len(blockedRigs))
+	for rigName := range blockedRigs {
 		rigNames = append(rigNames, rigName)
 	}
 	sort.Strings(rigNames)
 
 	var findings []StagingFinding
 	for _, rigName := range rigNames {
-		beadIDs := parkedRigBeads[rigName]
-		// Sort bead IDs for determinism
-		sort.Strings(beadIDs)
+		info := blockedRigs[rigName]
+		sort.Strings(info.beadIDs)
+		undoCmd := "gt rig unpark"
+		if info.reason == "docked" {
+			undoCmd = "gt rig undock"
+		}
 		findings = append(findings, StagingFinding{
 			Severity:     "warning",
 			Category:     "parked-rig",
-			BeadIDs:      beadIDs,
-			Message:      fmt.Sprintf("%d bead(s) target parked rig %q: %s", len(beadIDs), rigName, strings.Join(beadIDs, ", ")),
-			SuggestedFix: fmt.Sprintf("unpark the rig: gt rig unpark %s", rigName),
+			BeadIDs:      info.beadIDs,
+			Message:      fmt.Sprintf("%d bead(s) target %s rig %q: %s", len(info.beadIDs), info.reason, rigName, strings.Join(info.beadIDs, ", ")),
+			SuggestedFix: fmt.Sprintf("restore the rig: %s %s", undoCmd, rigName),
 		})
 	}
 	return findings

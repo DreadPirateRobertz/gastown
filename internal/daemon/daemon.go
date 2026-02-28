@@ -1330,6 +1330,12 @@ func (d *Daemon) getPatrolRigs(patrol string) []string {
 // isRigOperational checks if a rig is in an operational state.
 // Returns true if the rig can have agents auto-started.
 // Returns false (with reason) if the rig is parked, docked, or has auto_restart blocked/disabled.
+//
+// TODO(#2120): This duplicates parked/docked checking logic from
+// cmd.IsRigParkedOrDocked and cmd.hasRigBeadLabel. Consolidating into a
+// shared package (e.g. internal/rig) would eliminate the third implementation
+// and reduce drift risk. Not done here due to circular import constraints
+// (daemon cannot import cmd).
 func (d *Daemon) isRigOperational(rigName string) (bool, string) {
 	cfg := wisp.NewConfig(d.config.TownRoot, rigName)
 

@@ -1196,12 +1196,15 @@ func TestDetectWarnings_ParkedRig(t *testing.T) {
 	}
 	t.Cleanup(func() { os.Chdir(oldDir) })
 
-	// Override isRigParkedFn to return true for "parkedrig"
-	origFn := isRigParkedFn
-	isRigParkedFn = func(townRoot, rigName string) bool {
-		return rigName == "parkedrig"
+	// Override isRigBlockedFn to return true for "parkedrig"
+	origFn := isRigBlockedFn
+	isRigBlockedFn = func(townRoot, rigName string) (bool, string) {
+		if rigName == "parkedrig" {
+			return true, "parked"
+		}
+		return false, ""
 	}
-	t.Cleanup(func() { isRigParkedFn = origFn })
+	t.Cleanup(func() { isRigBlockedFn = origFn })
 
 	dag := &ConvoyDAG{Nodes: map[string]*ConvoyDAGNode{
 		"gt-a": {ID: "gt-a", Type: "task", Rig: "parkedrig"},
@@ -1225,6 +1228,59 @@ func TestDetectWarnings_ParkedRig(t *testing.T) {
 	}
 	if !sliceContains(f.BeadIDs, "gt-a") {
 		t.Errorf("BeadIDs should contain gt-a, got %v", f.BeadIDs)
+	}
+}
+
+// Regression test for #2120 review item #1: docked rigs should also be detected.
+func TestDetectWarnings_DockedRig(t *testing.T) {
+	townRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(townRoot, ".beads"), 0o755); err != nil {
+		t.Fatalf("failed to create .beads: %v", err)
+	}
+	oldDir, _ := os.Getwd()
+	if err := os.Chdir(townRoot); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(oldDir) })
+
+	// Override isRigBlockedFn to return docked for "dockedrig"
+	origFn := isRigBlockedFn
+	isRigBlockedFn = func(townRoot, rigName string) (bool, string) {
+		if rigName == "dockedrig" {
+			return true, "docked"
+		}
+		return false, ""
+	}
+	t.Cleanup(func() { isRigBlockedFn = origFn })
+
+	dag := &ConvoyDAG{Nodes: map[string]*ConvoyDAGNode{
+		"gt-a": {ID: "gt-a", Type: "task", Rig: "dockedrig"},
+		"gt-b": {ID: "gt-b", Type: "task", Rig: "gastown"},
+	}}
+	input := &StageInput{Kind: StageInputTasks, IDs: []string{"gt-a", "gt-b"}}
+	findings := detectWarnings(dag, input)
+
+	var blockedFindings []StagingFinding
+	for _, f := range findings {
+		if f.Category == "parked-rig" {
+			blockedFindings = append(blockedFindings, f)
+		}
+	}
+	if len(blockedFindings) != 1 {
+		t.Fatalf("expected 1 parked-rig warning for docked rig, got %d: %+v", len(blockedFindings), findings)
+	}
+	f := blockedFindings[0]
+	if f.Severity != "warning" {
+		t.Errorf("severity = %q, want %q", f.Severity, "warning")
+	}
+	if !sliceContains(f.BeadIDs, "gt-a") {
+		t.Errorf("BeadIDs should contain gt-a, got %v", f.BeadIDs)
+	}
+	if !strings.Contains(f.Message, "docked") {
+		t.Errorf("message should mention 'docked', got: %s", f.Message)
+	}
+	if !strings.Contains(f.SuggestedFix, "undock") {
+		t.Errorf("suggested fix should mention 'undock', got: %s", f.SuggestedFix)
 	}
 }
 
@@ -1439,10 +1495,10 @@ func TestRenderWarnings_Format(t *testing.T) {
 
 // Test detectWarnings clean DAG — no warnings
 func TestDetectWarnings_Clean(t *testing.T) {
-	// Override isRigParkedFn so the test doesn't depend on real rig state.
-	origFn := isRigParkedFn
-	isRigParkedFn = func(townRoot, rigName string) bool { return false }
-	t.Cleanup(func() { isRigParkedFn = origFn })
+	// Override isRigBlockedFn so the test doesn't depend on real rig state.
+	origFn := isRigBlockedFn
+	isRigBlockedFn = func(townRoot, rigName string) (bool, string) { return false, "" }
+	t.Cleanup(func() { isRigBlockedFn = origFn })
 
 	// All tasks on same rig, all have deps between them, epic input.
 	dag := &ConvoyDAG{Nodes: map[string]*ConvoyDAGNode{
