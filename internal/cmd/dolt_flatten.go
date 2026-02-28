@@ -225,3 +225,15 @@ func findNewestFile(dir string) time.Time {
 	})
 	return newest
 }
+
+// flattenGetHead returns the HEAD commit hash via dolt_log.
+func flattenGetHead(db *sql.DB, dbName string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var hash string
+	query := fmt.Sprintf("SELECT commit_hash FROM `%s`.dolt_log ORDER BY date DESC LIMIT 1", dbName)
+	if err := db.QueryRowContext(ctx, query).Scan(&hash); err != nil {
+		return "", err
+	}
+	return hash, nil
+}

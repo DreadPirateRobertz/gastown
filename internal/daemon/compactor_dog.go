@@ -19,6 +19,8 @@ const (
 	compactorQueryTimeout = 30 * time.Second
 	// compactorGCTimeout is the timeout for CALL dolt_gc() after compaction.
 	compactorGCTimeout = 5 * time.Minute
+	// compactorBranchName is the temporary branch used during compaction.
+	compactorBranchName = "gt-compaction"
 )
 
 // CompactorDogConfig holds configuration for the compactor_dog patrol.
@@ -467,6 +469,23 @@ func (d *Daemon) compactorOpenDB(dbName string) (*sql.DB, error) {
 	dsn := fmt.Sprintf("root@tcp(%s:%d)/%s?parseTime=true&timeout=5s&readTimeout=30s&writeTimeout=30s",
 		"127.0.0.1", d.doltServerPort(), dbName)
 	return sql.Open("mysql", dsn)
+}
+
+// compactorGetHead returns the current HEAD commit hash of the main branch.
+func (d *Daemon) compactorGetHead(db *sql.DB, dbName string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), compactorQueryTimeout)
+	defer cancel()
+
+	var hash string
+	query := fmt.Sprintf("SELECT DOLT_HASHOF('main') FROM `%s`.dual", dbName)
+	if err := db.QueryRowContext(ctx, query).Scan(&hash); err != nil {
+		// Fallback: try without dual table.
+		query = fmt.Sprintf("SELECT commit_hash FROM `%s`.dolt_log ORDER BY date DESC LIMIT 1", dbName)
+		if err := db.QueryRowContext(ctx, query).Scan(&hash); err != nil {
+			return "", err
+		}
+	}
+	return hash, nil
 }
 
 // compactorGetRootCommit returns the hash of the earliest commit in the database.
