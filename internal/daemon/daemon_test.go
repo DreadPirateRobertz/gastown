@@ -354,6 +354,80 @@ func TestIsShutdownInProgress_ActiveLock(t *testing.T) {
 	}
 }
 
+func TestIsRunning_NoPIDFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	daemonDir := filepath.Join(tmpDir, "daemon")
+	if err := os.MkdirAll(daemonDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	running, pid, err := IsRunning(tmpDir)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if running {
+		t.Error("expected not running")
+	}
+	if pid != 0 {
+		t.Errorf("expected pid=0, got %d", pid)
+	}
+}
+
+func TestIsRunning_StalePID_NoError(t *testing.T) {
+	// When a stale PID file is present (process dead), IsRunning should
+	// clean it up and return (false, 0, nil) — NOT an error.
+	// This is the fix for GitHub #2107.
+	tmpDir := t.TempDir()
+	daemonDir := filepath.Join(tmpDir, "daemon")
+	if err := os.MkdirAll(daemonDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a PID file with a PID that definitely doesn't exist.
+	// PID 2147483647 (max int32) is extremely unlikely to be in use.
+	pidFile := filepath.Join(daemonDir, "daemon.pid")
+	if err := os.WriteFile(pidFile, []byte("2147483647"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	running, pid, err := IsRunning(tmpDir)
+	if err != nil {
+		t.Errorf("IsRunning should not return error for stale PID cleanup, got: %v", err)
+	}
+	if running {
+		t.Error("expected not running")
+	}
+	if pid != 0 {
+		t.Errorf("expected pid=0, got %d", pid)
+	}
+
+	// PID file should have been removed
+	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
+		t.Error("expected stale PID file to be removed")
+	}
+}
+
+func TestIsRunning_CorruptPIDFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	daemonDir := filepath.Join(tmpDir, "daemon")
+	if err := os.MkdirAll(daemonDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	pidFile := filepath.Join(daemonDir, "daemon.pid")
+	if err := os.WriteFile(pidFile, []byte("not-a-number"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	running, _, err := IsRunning(tmpDir)
+	if err == nil {
+		t.Error("expected error for corrupt PID file")
+	}
+	if running {
+		t.Error("expected not running")
+	}
+}
+
 // TestDaemon_StartsManagerAndScanner verifies that the convoy manager (event-driven + stranded scan)
 // starts and stops correctly when used as the daemon does.
 func TestDaemon_StartsManagerAndScanner(t *testing.T) {

@@ -1532,8 +1532,7 @@ func IsRunning(townRoot string) (bool, int, error) {
 	if err := process.Signal(syscall.Signal(0)); err != nil {
 		// Process not running, clean up stale PID file
 		if err := os.Remove(pidFile); err == nil {
-			// Successfully cleaned up stale file
-			return false, 0, fmt.Errorf("removed stale PID file (process %d not found)", pid)
+			fmt.Fprintf(os.Stderr, "Removed stale daemon PID file (process %d not found)\n", pid)
 		}
 		return false, 0, nil
 	}
@@ -1542,7 +1541,7 @@ func IsRunning(townRoot string) (bool, int, error) {
 	if !isGasTownDaemon(pid) {
 		// PID reused by different process
 		if err := os.Remove(pidFile); err == nil {
-			return false, 0, fmt.Errorf("removed stale PID file (PID %d is not gt daemon)", pid)
+			fmt.Fprintf(os.Stderr, "Removed stale daemon PID file (PID %d is not gt daemon)\n", pid)
 		}
 		return false, 0, nil
 	}
