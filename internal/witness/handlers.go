@@ -989,7 +989,7 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 			agentState, _ := getAgentBeadState(workDir, agentBeadID)
 			if beads.AgentState(agentState) == AgentStateIdle {
 				cleanupStatus := getCleanupStatus(workDir, rigName, polecatName)
-				if cleanupStatus == "dirty" {
+				if cleanupStatus != "" && cleanupStatus != "clean" {
 					// ZFC (gt-5rne): Report data, don't escalate. The witness agent
 					// decides whether dirty idle state warrants escalation.
 					zombie := ZombieResult{
