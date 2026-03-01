@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/gastown/internal/beads"
 	"github.com/steveyegge/gastown/internal/config"
+	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/events"
 	"github.com/steveyegge/gastown/internal/nudge"
 	"github.com/steveyegge/gastown/internal/session"
@@ -292,9 +293,9 @@ func runNudge(cmd *cobra.Command, args []string) (retErr error) {
 	// Expand role shortcuts to session names
 	// These shortcuts let users type "mayor" instead of "gt-mayor"
 	switch target {
-	case "mayor":
+	case constants.RoleMayor:
 		target = session.MayorSessionName()
-	case "witness", "refinery":
+	case constants.RoleWitness, constants.RoleRefinery:
 		// These need the current rig
 		roleInfo, err := GetRole()
 		if err != nil {
@@ -304,7 +305,7 @@ func runNudge(cmd *cobra.Command, args []string) (retErr error) {
 			return fmt.Errorf("cannot determine rig for %s shortcut (not in a rig context)", target)
 		}
 		rigPrefix := session.PrefixFor(roleInfo.Rig)
-		if target == "witness" {
+		if target == constants.RoleWitness {
 			target = session.WitnessSessionName(rigPrefix)
 		} else {
 			target = session.RefinerySessionName(rigPrefix)
@@ -312,7 +313,7 @@ func runNudge(cmd *cobra.Command, args []string) (retErr error) {
 	}
 
 	// Special case: "deacon" target maps to the Deacon session
-	if target == "deacon" {
+	if target == constants.RoleDeacon {
 		deaconSession := session.DeaconSessionName()
 		// Check if Deacon session exists
 		exists, err := t.HasSession(deaconSession)
@@ -552,9 +553,9 @@ func resolveNudgePattern(pattern string, agents []*AgentSession) []string {
 
 	// Handle special cases
 	switch pattern {
-	case "mayor":
+	case constants.RoleMayor:
 		return []string{session.MayorSessionName()}
-	case "deacon":
+	case constants.RoleDeacon:
 		return []string{session.DeaconSessionName()}
 	}
 
@@ -685,9 +686,9 @@ func sessionNameToAddress(sessionName string) string {
 func addressToAgentBeadID(address string) string {
 	// Handle special cases
 	switch address {
-	case "mayor":
+	case constants.RoleMayor:
 		return session.MayorSessionName()
-	case "deacon":
+	case constants.RoleDeacon:
 		return session.DeaconSessionName()
 	}
 
@@ -705,9 +706,9 @@ func addressToAgentBeadID(address string) string {
 	role := parts[1]
 
 	switch role {
-	case "witness":
+	case constants.RoleWitness:
 		return session.WitnessSessionName(session.PrefixFor(rig))
-	case "refinery":
+	case constants.RoleRefinery:
 		return session.RefinerySessionName(session.PrefixFor(rig))
 	default:
 		// Assume polecat
