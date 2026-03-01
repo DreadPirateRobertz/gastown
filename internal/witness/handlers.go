@@ -1598,7 +1598,7 @@ func getBeadStatus(workDir, beadID string) string {
 // 2. Resets status to open
 // 3. Clears assignee
 // 4. Sends mail to deacon for re-dispatch (includes respawn count; SPAWN_STORM
-//    prefix and Urgent priority when count exceeds defaultMaxBeadRespawns)
+//    prefix and Urgent priority when count exceeds DefaultMaxBeadRespawns)
 // Returns true if the bead was recovered.
 func resetAbandonedBead(workDir, rigName, hookBead, polecatName string, router *mail.Router) bool {
 	if hookBead == "" {
@@ -1613,7 +1613,7 @@ func resetAbandonedBead(workDir, rigName, hookBead, polecatName string, router *
 	// respawned too many times, escalate to mayor instead of re-dispatching.
 	// This prevents the witness→deacon→spawn feedback loop from creating
 	// unbounded polecats when a task repeatedly kills its polecat.
-	if shouldBlockRespawn(workDir, hookBead) {
+	if ShouldBlockRespawn(workDir, hookBead) {
 		if router != nil {
 			msg := &mail.Message{
 				From:     fmt.Sprintf("%s/witness", rigName),
@@ -1628,7 +1628,7 @@ Previous Status: %s
 
 Action required: investigate why this task keeps killing its polecat,
 then either close the bead or reset the respawn counter.`,
-					hookBead, defaultMaxBeadRespawns, rigName, polecatName, status),
+					hookBead, DefaultMaxBeadRespawns, rigName, polecatName, status),
 			}
 			_ = router.Send(msg)
 		}
@@ -1636,7 +1636,7 @@ then either close the bead or reset the respawn counter.`,
 	}
 
 	// Track respawn count for audit and storm detection.
-	respawnCount := recordBeadRespawn(workDir, hookBead)
+	respawnCount := RecordBeadRespawn(workDir, hookBead)
 
 	// Reset bead status to open and clear assignee
 	if err := bdRun(workDir, "update", hookBead, "--status=open", "--assignee="); err != nil {
@@ -1648,7 +1648,7 @@ then either close the bead or reset the respawn counter.`,
 		subject := fmt.Sprintf("RECOVERED_BEAD %s", hookBead)
 		priority := mail.PriorityHigh
 		stormNote := ""
-		if respawnCount >= defaultMaxBeadRespawns {
+		if respawnCount >= DefaultMaxBeadRespawns {
 			subject = fmt.Sprintf("SPAWN_STORM RECOVERED_BEAD %s (respawned %dx)", hookBead, respawnCount)
 			priority = mail.PriorityUrgent
 			stormNote = fmt.Sprintf("\n\n⚠️ SPAWN STORM: bead has been reset %d times. "+
