@@ -484,7 +484,7 @@ func (d *Daemon) surgicalRebaseOnce(dbName string, keepRecent int) error {
 }
 
 // surgicalCleanup switches back to main and removes rebase branches.
-func (d *Daemon) surgicalCleanup(db *sql.DB, baseBranch, workBranch string) {
+func (d *Daemon) surgicalCleanup(db *sql.DB, baseBranch, workBranch string) { //nolint:unparam // baseBranch parameterized for clarity
 	ctx, cancel := context.WithTimeout(context.Background(), compactorQueryTimeout)
 	defer cancel()
 	_, _ = db.ExecContext(ctx, "CALL DOLT_CHECKOUT('main')")

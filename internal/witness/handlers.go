@@ -199,7 +199,7 @@ func TransitionPolecatToIdle(workDir, agentBeadID string) error {
 
 // handlePolecatDonePendingMR handles a POLECAT_DONE when there's a pending MR.
 // Creates a cleanup wisp, sends MERGE_READY to the Refinery, and nudges it.
-func handlePolecatDonePendingMR(workDir, rigName string, payload *PolecatDonePayload, router *mail.Router, result *HandlerResult) *HandlerResult {
+func handlePolecatDonePendingMR(workDir, rigName string, payload *PolecatDonePayload, router *mail.Router, result *HandlerResult) *HandlerResult { //nolint:unparam // router kept for handler interface consistency
 	wispID, err := createCleanupWisp(workDir, payload.PolecatName, payload.IssueID, payload.Branch)
 	if err != nil {
 		result.Error = fmt.Errorf("creating cleanup wisp: %w", err)
@@ -222,7 +222,7 @@ func handlePolecatDonePendingMR(workDir, rigName string, payload *PolecatDonePay
 // Previously sent MERGE_READY mail (creating permanent Dolt commits); now
 // just nudges. The Refinery discovers pending MRs from beads queries.
 // Errors are non-fatal (Refinery will still pick up work on next patrol cycle).
-func notifyRefineryMergeReady(workDir, rigName string, payload *PolecatDonePayload, result *HandlerResult) {
+func notifyRefineryMergeReady(workDir, rigName string, payload *PolecatDonePayload, result *HandlerResult) { //nolint:unparam // payload kept for handler interface consistency
 	townRoot, _ := workspace.Find(workDir)
 	if nudgeErr := nudgeRefinery(townRoot, rigName); nudgeErr != nil {
 		if result.Error == nil {
@@ -965,7 +965,7 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 						WasActive:   false,
 						Action:      "escalated-dirty-idle-polecat",
 					}
-					EscalateRecoveryNeeded(workDir, rigName, &RecoveryPayload{
+					_, _ = EscalateRecoveryNeeded(workDir, rigName, &RecoveryPayload{
 						PolecatName:   polecatName,
 						Rig:           rigName,
 						CleanupStatus: cleanupStatus,
@@ -1146,7 +1146,7 @@ func isZombieState(agentState, hookBead string) bool {
 // handleZombieRestart determines the restart action for a confirmed zombie (gt-dsgp).
 // Clean or empty status → restart session. Dirty status → escalate AND restart.
 // This replaces the old handleZombieCleanup nuke behavior.
-func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus string, router *mail.Router, zombie *ZombieResult) {
+func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus string, router *mail.Router, zombie *ZombieResult) { //nolint:unparam // router kept for handler interface consistency
 	switch cleanupStatus {
 	case "clean", "":
 		// Clean state or no cleanup info — restart session.
@@ -1193,7 +1193,7 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 // its cleanup_status. Clean or empty status → auto-nuke. Dirty status → escalate.
 // DEPRECATED (gt-dsgp): Use handleZombieRestart instead. This function is preserved
 // for backward compatibility with any callers that still reference it.
-func handleZombieCleanup(workDir, rigName, polecatName, hookBead, cleanupStatus string, router *mail.Router, zombie *ZombieResult) {
+func handleZombieCleanup(workDir, rigName, polecatName, hookBead, cleanupStatus string, router *mail.Router, zombie *ZombieResult) { //nolint:unparam // router kept for handler interface consistency
 	switch cleanupStatus {
 	case "clean", "":
 		// Clean state or no cleanup info — try auto-nuke.
@@ -1472,7 +1472,7 @@ func DiscoverCompletions(workDir, rigName string, router *mail.Router) *Discover
 // processDiscoveredCompletion routes a discovered completion through the same
 // logic as HandlePolecatDone, creating cleanup wisps and sending MERGE_READY
 // as appropriate. This is the bead-based equivalent of POLECAT_DONE mail handling.
-func processDiscoveredCompletion(workDir, rigName string, payload *PolecatDonePayload, router *mail.Router, discovery *CompletionDiscovery) {
+func processDiscoveredCompletion(workDir, rigName string, payload *PolecatDonePayload, router *mail.Router, discovery *CompletionDiscovery) { //nolint:unparam // router kept for handler interface consistency
 	if payload.Exit == string(ExitTypePhaseComplete) {
 		discovery.Action = "phase-complete"
 		return

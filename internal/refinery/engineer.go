@@ -1377,7 +1377,7 @@ func (e *Engineer) ListQueueAnomalies(now time.Time) ([]*MRAnomaly, error) {
 func detectQueueAnomalies(
 	issues []*beads.Issue,
 	now time.Time,
-	warningAfter, criticalAfter time.Duration,
+	warningAfter, criticalAfter time.Duration, //nolint:unparam // criticalAfter reserved for severity tiers
 	branchExistsFn func(branch string) (localExists bool, remoteTrackingExists bool, err error),
 ) []*MRAnomaly {
 	var anomalies []*MRAnomaly

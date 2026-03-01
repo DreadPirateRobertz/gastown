@@ -17,7 +17,7 @@ import (
 
 // writePIDFile writes a PID file with a unique nonce for ownership verification.
 // Returns the nonce written, which is only needed for testing.
-func writePIDFile(path string, pid int) (string, error) {
+func writePIDFile(path string, pid int) (string, error) { //nolint:unparam // nonce return used in tests
 	nonce, err := generateNonce()
 	if err != nil {
 		return "", fmt.Errorf("generating nonce: %w", err)

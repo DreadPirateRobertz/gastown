@@ -520,7 +520,7 @@ func mrIDs(mrs []*MRInfo) []string {
 }
 
 // resetAndRebuildStack resets the target branch and rebuilds the squash-merge stack.
-func (e *Engineer) resetAndRebuildStack(ctx context.Context, mrs []*MRInfo, target string) error {
+func (e *Engineer) resetAndRebuildStack(ctx context.Context, mrs []*MRInfo, target string) error { //nolint:unparam // ctx reserved for future use
 	// Reset target to origin
 	if err := e.git.Checkout(target); err != nil {
 		return fmt.Errorf("checkout %s: %w", target, err)

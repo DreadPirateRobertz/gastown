@@ -340,7 +340,7 @@ func rebaseCleanup(db *sql.DB, baseBranch, workBranch string) {
 }
 
 // rebaseAbortAndCleanup aborts an in-progress rebase then cleans up branches.
-func rebaseAbortAndCleanup(db *sql.DB, baseBranch, workBranch string) {
+func rebaseAbortAndCleanup(db *sql.DB, baseBranch, workBranch string) { //nolint:unparam // baseBranch parameterized for clarity
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_, _ = db.ExecContext(ctx, "CALL DOLT_REBASE('--abort')")
@@ -350,7 +350,7 @@ func rebaseAbortAndCleanup(db *sql.DB, baseBranch, workBranch string) {
 }
 
 // rebaseCleanupAll cleans up both branches after a failed rebase.
-func rebaseCleanupAll(db *sql.DB, baseBranch, workBranch string) {
+func rebaseCleanupAll(db *sql.DB, baseBranch, workBranch string) { //nolint:unparam // baseBranch parameterized for clarity
 	rebaseCleanup(db, baseBranch, workBranch)
 }
 
