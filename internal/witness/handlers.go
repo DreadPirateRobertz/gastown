@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/git"
 	"github.com/steveyegge/gastown/internal/mail"
@@ -950,6 +951,9 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 	}
 	initRegistryFromTownRoot(townRoot)
 
+	// Load witness thresholds from config (fallback to compiled-in defaults).
+	witCfg := config.LoadOperationalConfig(townRoot).GetWitnessConfig()
+
 	polecatsDir := filepath.Join(townRoot, rigName, "polecats")
 	entries, err := os.ReadDir(polecatsDir)
 	if err != nil {
@@ -1006,7 +1010,7 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 				continue
 			}
 
-			if zombie, found := detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, sessionName, t, doneIntent); found {
+			if zombie, found := detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, sessionName, t, doneIntent, witCfg); found {
 				result.Zombies = append(result.Zombies, zombie)
 			}
 			continue // Either handled or not a zombie
@@ -1025,11 +1029,11 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 //
 // gt-dsgp: Uses restart-first policy. Instead of nuking polecats, restarts their
 // sessions to preserve worktrees and branches.
-func detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, sessionName string, t *tmux.Tmux, doneIntent *DoneIntent) (ZombieResult, bool) {
+func detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, sessionName string, t *tmux.Tmux, doneIntent *DoneIntent, witCfg *config.WitnessThresholds) (ZombieResult, bool) {
 	// Check for done-intent stuck too long (polecat hung in gt done).
 	// gt-dsgp: Restart instead of nuke — the session is stuck trying to exit,
 	// a fresh start will let it retry or pick up its hook cleanly.
-	if doneIntent != nil && time.Since(doneIntent.Timestamp) > 60*time.Second {
+	if doneIntent != nil && time.Since(doneIntent.Timestamp) > witCfg.DoneIntentStuckTimeoutD() {
 		stuckAgentState, stuckHookBead := getAgentBeadState(workDir, agentBeadID)
 		zombie := ZombieResult{
 			PolecatName:    polecatName,
@@ -1269,6 +1273,11 @@ func DetectStalledPolecats(workDir, rigName string) *DetectStalledPolecatsResult
 	}
 	initRegistryFromTownRoot(townRoot)
 
+	// Load witness thresholds from config (fallback to compiled-in defaults).
+	witCfg := config.LoadOperationalConfig(townRoot).GetWitnessConfig()
+	stallThreshold := witCfg.StartupStallThresholdD()
+	activityGrace := witCfg.StartupActivityGraceD()
+
 	// List all polecat directories
 	polecatsDir := filepath.Join(townRoot, rigName, "polecats")
 	entries, err := os.ReadDir(polecatsDir)
@@ -1311,7 +1320,7 @@ func DetectStalledPolecats(workDir, rigName string) *DetectStalledPolecatsResult
 			continue
 		}
 		sessionAge := now.Sub(time.Unix(createdUnix, 0))
-		if sessionAge < StartupStallThreshold {
+		if sessionAge < stallThreshold {
 			continue // Too young — still in normal startup
 		}
 
@@ -1322,7 +1331,7 @@ func DetectStalledPolecats(workDir, rigName string) *DetectStalledPolecatsResult
 			continue
 		}
 		activityAge := now.Sub(activity)
-		if activityAge < StartupActivityGrace {
+		if activityAge < activityGrace {
 			continue // Recent activity — agent is making progress
 		}
 
@@ -1612,6 +1621,13 @@ func resetAbandonedBead(workDir, rigName, hookBead, polecatName string, router *
 	// Track respawn count for audit and storm detection.
 	respawnCount := recordBeadRespawn(workDir, hookBead)
 
+	// Load max respawns threshold from config.
+	trRoot, trErr := workspace.Find(workDir)
+	if trErr != nil || trRoot == "" {
+		trRoot = workDir
+	}
+	maxRespawns := config.LoadOperationalConfig(trRoot).GetWitnessConfig().MaxBeadRespawnsV()
+
 	// Reset bead status to open and clear assignee
 	if err := bdRun(workDir, "update", hookBead, "--status=open", "--assignee="); err != nil {
 		return false
@@ -1622,7 +1638,7 @@ func resetAbandonedBead(workDir, rigName, hookBead, polecatName string, router *
 		subject := fmt.Sprintf("RECOVERED_BEAD %s", hookBead)
 		priority := mail.PriorityHigh
 		stormNote := ""
-		if respawnCount > defaultMaxBeadRespawns {
+		if respawnCount > maxRespawns {
 			subject = fmt.Sprintf("SPAWN_STORM RECOVERED_BEAD %s (respawned %dx)", hookBead, respawnCount)
 			priority = mail.PriorityUrgent
 			stormNote = fmt.Sprintf("\n\n⚠️ SPAWN STORM: bead has been reset %d times. "+

@@ -212,6 +212,9 @@ type OperationalConfig struct {
 
 	// Web configures web API thresholds.
 	Web *WebThresholds `json:"web,omitempty"`
+
+	// Witness configures witness patrol thresholds.
+	Witness *WitnessThresholds `json:"witness,omitempty"`
 }
 
 // SessionThresholds configures session management timeouts.
@@ -394,6 +397,29 @@ type WebThresholds struct {
 
 	// MaxBodyLen is max body length for mail API (default 100000).
 	MaxBodyLen *int `json:"max_body_len,omitempty"`
+}
+
+// WitnessThresholds configures witness patrol detection thresholds.
+type WitnessThresholds struct {
+	// StartupStallThreshold is the minimum session age before a session with no
+	// recent activity is considered stalled at startup (default "90s").
+	StartupStallThreshold string `json:"startup_stall_threshold,omitempty"`
+
+	// StartupActivityGrace is the max time since last activity before a session
+	// old enough to be past startup is considered stalled (default "60s").
+	StartupActivityGrace string `json:"startup_activity_grace,omitempty"`
+
+	// MaxBeadRespawns is the threshold above which a SPAWN_STORM warning is
+	// included in RECOVERED_BEAD mail (default 2).
+	MaxBeadRespawns *int `json:"max_bead_respawns,omitempty"`
+
+	// DoneIntentStuckTimeout is how long a done-intent can be active before the
+	// session is considered stuck and restarted (default "60s").
+	DoneIntentStuckTimeout string `json:"done_intent_stuck_timeout,omitempty"`
+
+	// DoneIntentRecentGrace is how recently a done-intent must have been created
+	// to be considered still in progress (default "30s").
+	DoneIntentRecentGrace string `json:"done_intent_recent_grace,omitempty"`
 }
 
 // DefaultOperationalConfig returns an OperationalConfig with all defaults.
