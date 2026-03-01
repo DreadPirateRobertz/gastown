@@ -1161,8 +1161,12 @@ func updateAgentStateOnDone(cwd, townRoot, exitType, _ string) { // issueID unus
 
 	if agentBead.HookBead != "" {
 		hookedBeadID := agentBead.HookBead
-		// Only close if the hooked bead exists and is still in "hooked" status
-		if hookedBead, err := bd.Show(hookedBeadID); err == nil && hookedBead.Status == beads.StatusHooked {
+		// BUG FIX (gt-pftz): Close hooked bead unless already terminal (closed/tombstone).
+		// Previously checked hookedBead.Status == StatusHooked, but polecats update
+		// their work bead to in_progress during work. The exact-match check caused
+		// gt done to skip closing the bead, leaving it as unassigned open work after
+		// the hook was cleared — triggering infinite dispatch loops.
+		if hookedBead, err := bd.Show(hookedBeadID); err == nil && !beads.IssueStatus(hookedBead.Status).IsTerminal() {
 			// BUG FIX: Close attached molecule (wisp) BEFORE closing hooked bead.
 			// When using formula-on-bead (gt sling formula --on bead), the base bead
 			// has attached_molecule pointing to the wisp. Without this fix, gt done
