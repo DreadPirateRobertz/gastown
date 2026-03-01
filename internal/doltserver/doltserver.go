@@ -176,7 +176,8 @@ type Config struct {
 	MaxConnections int
 
 	// LogLevel is the Dolt server log level (trace, debug, info, warn, error, fatal).
-	// Default is "info". Override with GT_DOLT_LOGLEVEL=debug for diagnostics.
+	// Default is "warn" to suppress connection open/close noise. Override with
+	// GT_DOLT_LOGLEVEL=info (or debug) for diagnostics.
 	LogLevel string
 }
 
@@ -197,7 +198,7 @@ func DefaultConfig(townRoot string) *Config {
 		LogFile:        filepath.Join(daemonDir, "dolt.log"),
 		PidFile:        filepath.Join(daemonDir, "dolt.pid"),
 		MaxConnections: DefaultMaxConnections,
-		LogLevel:       "info",
+		LogLevel:       "warn",
 	}
 
 	if h := os.Getenv("GT_DOLT_HOST"); h != "" {
@@ -218,9 +219,9 @@ func DefaultConfig(townRoot string) *Config {
 		config.LogLevel = ll
 	}
 
-	// Default to info logging. Use GT_DOLT_LOGLEVEL=debug for diagnostics.
+	// Default to warn logging. Use GT_DOLT_LOGLEVEL=info or =debug for diagnostics.
 	if config.LogLevel == "" {
-		config.LogLevel = "info"
+		config.LogLevel = "warn"
 	}
 
 	return config
