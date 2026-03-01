@@ -49,6 +49,7 @@ var validDBName = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 // Kept separate from Sprintf to avoid %% confusion.
 // The query selects only durable work product (bugs, features, tasks, epics, chores).
 const scrubWhereClause = ` WHERE (ephemeral IS NULL OR ephemeral != 1)` +
+	` AND status != 'tombstone'` +
 	` AND issue_type NOT IN ('message', 'event', 'agent', 'convoy', 'molecule', 'role', 'merge-request', 'rig')` +
 	` AND id NOT LIKE '%-wisp-%'` +
 	` AND id NOT LIKE '%-cv-%'` +
