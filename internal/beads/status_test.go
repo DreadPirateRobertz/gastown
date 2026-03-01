@@ -144,3 +144,45 @@ func TestIssueStatusConstants(t *testing.T) {
 		}
 	}
 }
+
+func TestStringHelpers(t *testing.T) {
+	t.Parallel()
+
+	// IsTerminalStatus
+	if !IsTerminalStatus("closed") {
+		t.Error("IsTerminalStatus(closed) should be true")
+	}
+	if !IsTerminalStatus("tombstone") {
+		t.Error("IsTerminalStatus(tombstone) should be true")
+	}
+	if IsTerminalStatus("open") {
+		t.Error("IsTerminalStatus(open) should be false")
+	}
+
+	// IsAssignedStatus
+	if !IsAssignedStatus("hooked") {
+		t.Error("IsAssignedStatus(hooked) should be true")
+	}
+	if !IsAssignedStatus("in_progress") {
+		t.Error("IsAssignedStatus(in_progress) should be true")
+	}
+	if IsAssignedStatus("open") {
+		t.Error("IsAssignedStatus(open) should be false")
+	}
+
+	// IsClosedStatus
+	if !IsClosedStatus("closed") {
+		t.Error("IsClosedStatus(closed) should be true")
+	}
+	if IsClosedStatus("tombstone") {
+		t.Error("IsClosedStatus(tombstone) should be false")
+	}
+
+	// IsOpenStatus
+	if !IsOpenStatus("open") {
+		t.Error("IsOpenStatus(open) should be true")
+	}
+	if IsOpenStatus("closed") {
+		t.Error("IsOpenStatus(closed) should be false")
+	}
+}

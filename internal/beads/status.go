@@ -91,3 +91,19 @@ func (s IssueStatus) IsAssigned() bool {
 		return false
 	}
 }
+
+// String-accepting helpers for comparing with Issue.Status (which is string type).
+// These avoid verbose casts at callsites: beads.IsTerminalStatus(s) vs
+// beads.IssueStatus(s).IsTerminal().
+
+// IsTerminalStatus returns true if the string status is terminal (closed or tombstone).
+func IsTerminalStatus(s string) bool { return IssueStatus(s).IsTerminal() }
+
+// IsAssignedStatus returns true if the string status indicates active assignment (hooked or in_progress).
+func IsAssignedStatus(s string) bool { return IssueStatus(s).IsAssigned() }
+
+// IsClosedStatus returns true if the string status is exactly "closed".
+func IsClosedStatus(s string) bool { return IssueStatus(s) == StatusClosed }
+
+// IsOpenStatus returns true if the string status is exactly "open".
+func IsOpenStatus(s string) bool { return IssueStatus(s) == StatusOpen }
