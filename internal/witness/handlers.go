@@ -14,6 +14,7 @@ import (
 	"github.com/steveyegge/gastown/internal/constants"
 	"github.com/steveyegge/gastown/internal/git"
 	"github.com/steveyegge/gastown/internal/mail"
+	"github.com/steveyegge/gastown/internal/polecat"
 	"github.com/steveyegge/gastown/internal/rig"
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/tmux"
@@ -353,31 +354,18 @@ func HandleMerged(workDir, rigName string, msg *mail.Message) *HandlerResult {
 
 // handleMergedCleanupStatus acknowledges merge completion for persistent polecats.
 // Persistent model (gt-4ac): polecats go idle after merge, sandbox preserved.
-// ZFC #10: still warns about dirty state (uncommitted/stash/unpushed) since
-// that indicates the polecat may have started new work after the MR.
-func handleMergedCleanupStatus(_, _, polecatName, cleanupStatus, wispID string, result *HandlerResult) {
+// Uses polecat.CleanupStatus semantic methods instead of string matching (gt-td6p).
+func handleMergedCleanupStatus(_, _, polecatName string, cleanupStatus polecat.CleanupStatus, wispID string, result *HandlerResult) {
 	result.Handled = true
 	result.WispCreated = wispID
 
-	switch cleanupStatus {
-	case "clean", "":
+	if cleanupStatus.IsSafe() || cleanupStatus == "" {
 		// Clean state — polecat is idle, sandbox preserved for reuse.
 		result.Action = fmt.Sprintf("polecat %s merged successfully — idle, sandbox preserved (wisp=%s)", polecatName, wispID)
-
-	case "has_uncommitted":
-		// ZFC: report data (cleanup_status), don't hardcode escalation target
-		result.Error = fmt.Errorf("polecat %s has uncommitted changes after merge (cleanup_status=%s)", polecatName, cleanupStatus)
-		result.Action = fmt.Sprintf("WARNING: %s has uncommitted work post-merge, needs review", polecatName)
-
-	case "has_stash":
-		result.Error = fmt.Errorf("polecat %s has stashed work after merge (cleanup_status=%s)", polecatName, cleanupStatus)
-		result.Action = fmt.Sprintf("WARNING: %s has stashed work post-merge, needs review", polecatName)
-
-	case "has_unpushed":
-		result.Error = fmt.Errorf("polecat %s has unpushed commits after merge (cleanup_status=%s)", polecatName, cleanupStatus)
-		result.Action = fmt.Sprintf("WARNING: %s has unpushed commits post-merge, needs review", polecatName)
-
-	default:
+	} else if cleanupStatus.RequiresRecovery() {
+		result.Error = fmt.Errorf("polecat %s has dirty state after merge (cleanup_status=%s)", polecatName, cleanupStatus)
+		result.Action = fmt.Sprintf("WARNING: %s has %s post-merge, needs review", polecatName, cleanupStatus)
+	} else {
 		// Unknown status — polecat is idle, let gt sling handle cleanup on reuse.
 		result.Action = fmt.Sprintf("polecat %s merged — idle, sandbox preserved (cleanup_status=%s, wisp=%s)", polecatName, cleanupStatus, wispID)
 	}
@@ -546,12 +534,12 @@ type agentBeadResponse struct {
 }
 
 // getCleanupStatus retrieves the cleanup_status from a polecat's agent bead.
-// Returns the status string: "clean", "has_uncommitted", "has_stash", "has_unpushed"
-// Returns empty string if agent bead doesn't exist or has no cleanup_status.
+// Returns a typed polecat.CleanupStatus for use with semantic methods (IsSafe,
+// RequiresRecovery, etc.) instead of raw string comparisons.
 //
 // ZFC #10: This enables the Witness to verify it's safe to nuke before proceeding.
 // The polecat self-reports its git state when running `gt done`, and we trust that report.
-func getCleanupStatus(workDir, rigName, polecatName string) string {
+func getCleanupStatus(workDir, rigName, polecatName string) polecat.CleanupStatus {
 	// Construct agent bead ID using the rig's configured prefix
 	// This supports non-gt prefixes like "bd-" for the beads rig
 	townRoot, err := workspace.Find(workDir)
@@ -580,7 +568,7 @@ func getCleanupStatus(workDir, rigName, polecatName string) string {
 
 	// Use structured field parser instead of ad-hoc string parsing
 	fields := beads.ParseAgentFields(issues[0].Description)
-	return fields.CleanupStatus
+	return polecat.CleanupStatus(fields.CleanupStatus)
 }
 
 // findMRBeadForBranch queries beads for an open merge-request bead whose
@@ -958,7 +946,7 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 			agentState, _ := getAgentBeadState(workDir, agentBeadID)
 			if agentState == string(AgentStateIdle) {
 				cleanupStatus := getCleanupStatus(workDir, rigName, polecatName)
-				if cleanupStatus == "dirty" {
+				if cleanupStatus.RequiresRecovery() {
 					zombie := ZombieResult{
 						PolecatName: polecatName,
 						AgentState:  "idle-dirty-sandbox",
@@ -968,7 +956,7 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 					_, _ = EscalateRecoveryNeeded(workDir, rigName, &RecoveryPayload{
 						PolecatName:   polecatName,
 						Rig:           rigName,
-						CleanupStatus: cleanupStatus,
+						CleanupStatus: string(cleanupStatus),
 						DetectedAt:    time.Now(),
 					})
 					result.Zombies = append(result.Zombies, zombie)
@@ -1145,18 +1133,16 @@ func isZombieState(agentState, hookBead string) bool {
 
 // handleZombieRestart determines the restart action for a confirmed zombie (gt-dsgp).
 // Clean or empty status → restart session. Dirty status → escalate AND restart.
-// This replaces the old handleZombieCleanup nuke behavior.
-func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus string, zombie *ZombieResult) {
-	switch cleanupStatus {
-	case "clean", "":
+// Uses polecat.CleanupStatus semantic methods instead of string matching (gt-td6p).
+func handleZombieRestart(workDir, rigName, polecatName, hookBead string, cleanupStatus polecat.CleanupStatus, zombie *ZombieResult) {
+	if cleanupStatus.IsSafe() || cleanupStatus == "" {
 		// Clean state or no cleanup info — restart session.
 		zombie.Action = "restarted"
 		if err := RestartPolecatSession(workDir, rigName, polecatName); err != nil {
 			zombie.Error = err
 			zombie.Action = fmt.Sprintf("restart-failed: %v", err)
 		}
-
-	case "has_uncommitted", "has_stash", "has_unpushed":
+	} else if cleanupStatus.RequiresRecovery() {
 		// Dirty state — escalate for visibility, but still restart.
 		// The escalation notifies that the polecat has unsaved work,
 		// but restarting preserves the worktree so nothing is lost.
@@ -1167,7 +1153,7 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 			_, escErr := EscalateRecoveryNeeded(workDir, rigName, &RecoveryPayload{
 				PolecatName:   polecatName,
 				Rig:           rigName,
-				CleanupStatus: cleanupStatus,
+				CleanupStatus: string(cleanupStatus),
 				IssueID:       hookBead,
 				DetectedAt:    time.Now(),
 			})
@@ -1193,9 +1179,9 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 // its cleanup_status. Clean or empty status → auto-nuke. Dirty status → escalate.
 // DEPRECATED (gt-dsgp): Use handleZombieRestart instead. This function is preserved
 // for backward compatibility with any callers that still reference it.
-func handleZombieCleanup(workDir, rigName, polecatName, hookBead, cleanupStatus string, zombie *ZombieResult) {
-	switch cleanupStatus {
-	case "clean", "":
+// Uses polecat.CleanupStatus semantic methods instead of string matching (gt-td6p).
+func handleZombieCleanup(workDir, rigName, polecatName, hookBead string, cleanupStatus polecat.CleanupStatus, zombie *ZombieResult) {
+	if cleanupStatus.IsSafe() || cleanupStatus == "" {
 		// Clean state or no cleanup info — try auto-nuke.
 		// Empty status means polecat crashed before gt done; AutoNukeIfClean
 		// uses verifyCommitOnMain as fallback.
@@ -1212,8 +1198,7 @@ func handleZombieCleanup(workDir, rigName, polecatName, hookBead, cleanupStatus 
 			zombie.Error = nukeResult.Error
 			zombie.Action = "nuke-failed"
 		}
-
-	case "has_uncommitted", "has_stash", "has_unpushed":
+	} else if cleanupStatus.RequiresRecovery() {
 		// Dirty state — escalate, but check for existing wisp to prevent loops.
 		existingWisp := findAnyCleanupWisp(workDir, polecatName)
 		if existingWisp != "" {
@@ -1223,7 +1208,7 @@ func handleZombieCleanup(workDir, rigName, polecatName, hookBead, cleanupStatus 
 		_, escErr := EscalateRecoveryNeeded(workDir, rigName, &RecoveryPayload{
 			PolecatName:   polecatName,
 			Rig:           rigName,
-			CleanupStatus: cleanupStatus,
+			CleanupStatus: string(cleanupStatus),
 			IssueID:       hookBead,
 			DetectedAt:    time.Now(),
 		})
