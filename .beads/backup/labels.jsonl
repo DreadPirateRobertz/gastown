@@ -131,6 +131,10 @@
 {"issue_id":"gt-tsut","label":"zfc-violation"}
 {"issue_id":"gt-utbjv","label":"worker-lifecycle"}
 {"issue_id":"gt-wisp-1740a","label":"backoff-until:1772332325"}
+{"issue_id":"gt-wisp-i1wri","label":"plugin:rebuild-gt"}
+{"issue_id":"gt-wisp-i1wri","label":"result:success"}
+{"issue_id":"gt-wisp-i1wri","label":"rig:gastown"}
+{"issue_id":"gt-wisp-i1wri","label":"type:plugin-run"}
 {"issue_id":"gt-wisp-xoh2e","label":"idle:1"}
 {"issue_id":"gt-witness-role","label":"migrated-to:hq-witness-role"}
 {"issue_id":"gt-wrdz","label":"cleanup"}
