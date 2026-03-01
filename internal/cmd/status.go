@@ -173,9 +173,9 @@ func resolveAgentDisplay(townSettings *config.TownSettings, role string, session
 	configRole := role
 	switch role {
 	case "coordinator":
-		configRole = "mayor"
+		configRole = constants.RoleMayor
 	case "health-check":
-		configRole = "deacon"
+		configRole = constants.RoleDeacon
 	}
 
 	// Get alias from config
@@ -1018,13 +1018,13 @@ func outputStatusText(w io.Writer, status TownStatus) error {
 		var witnesses, refineries, crews, polecats []AgentRuntime
 		for _, agent := range r.Agents {
 			switch agent.Role {
-			case "witness":
+			case constants.RoleWitness:
 				witnesses = append(witnesses, agent)
-			case "refinery":
+			case constants.RoleRefinery:
 				refineries = append(refineries, agent)
-			case "crew":
+			case constants.RoleCrew:
 				crews = append(crews, agent)
-			case "polecat":
+			case constants.RolePolecat:
 				polecats = append(polecats, agent)
 			}
 		}
@@ -1032,14 +1032,14 @@ func outputStatusText(w io.Writer, status TownStatus) error {
 		// Witness
 		if len(witnesses) > 0 {
 			if statusVerbose {
-				fmt.Fprintf(w, "%s %s\n", roleIcons["witness"], style.Bold.Render("Witness"))
+				fmt.Fprintf(w, "%s %s\n", roleIcons[constants.RoleWitness], style.Bold.Render("Witness"))
 				for _, agent := range witnesses {
 					renderAgentDetails(w, agent, "   ", r.Hooks, status.Location)
 				}
 				fmt.Fprintln(w)
 			} else {
 				for _, agent := range witnesses {
-					renderAgentCompact(w, agent, roleIcons["witness"]+" ", r.Hooks, status.Location)
+					renderAgentCompact(w, agent, roleIcons[constants.RoleWitness]+" ", r.Hooks, status.Location)
 				}
 			}
 		}
@@ -1047,7 +1047,7 @@ func outputStatusText(w io.Writer, status TownStatus) error {
 		// Refinery
 		if len(refineries) > 0 {
 			if statusVerbose {
-				fmt.Fprintf(w, "%s %s\n", roleIcons["refinery"], style.Bold.Render("Refinery"))
+				fmt.Fprintf(w, "%s %s\n", roleIcons[constants.RoleRefinery], style.Bold.Render("Refinery"))
 				for _, agent := range refineries {
 					renderAgentDetails(w, agent, "   ", r.Hooks, status.Location)
 				}
@@ -1069,7 +1069,7 @@ func outputStatusText(w io.Writer, status TownStatus) error {
 							mqSuffix = "  " + mqStr
 						}
 					}
-					renderAgentCompactWithSuffix(w, agent, roleIcons["refinery"]+" ", r.Hooks, status.Location, mqSuffix)
+					renderAgentCompactWithSuffix(w, agent, roleIcons[constants.RoleRefinery]+" ", r.Hooks, status.Location, mqSuffix)
 				}
 			}
 		}
@@ -1077,13 +1077,13 @@ func outputStatusText(w io.Writer, status TownStatus) error {
 		// Crew
 		if len(crews) > 0 {
 			if statusVerbose {
-				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons["crew"], style.Bold.Render("Crew"), len(crews))
+				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RoleCrew], style.Bold.Render("Crew"), len(crews))
 				for _, agent := range crews {
 					renderAgentDetails(w, agent, "   ", r.Hooks, status.Location)
 				}
 				fmt.Fprintln(w)
 			} else {
-				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons["crew"], style.Bold.Render("Crew"), len(crews))
+				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RoleCrew], style.Bold.Render("Crew"), len(crews))
 				for _, agent := range crews {
 					renderAgentCompact(w, agent, "   ", r.Hooks, status.Location)
 				}
@@ -1093,13 +1093,13 @@ func outputStatusText(w io.Writer, status TownStatus) error {
 		// Polecats
 		if len(polecats) > 0 {
 			if statusVerbose {
-				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons["polecat"], style.Bold.Render("Polecats"), len(polecats))
+				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RolePolecat], style.Bold.Render("Polecats"), len(polecats))
 				for _, agent := range polecats {
 					renderAgentDetails(w, agent, "   ", r.Hooks, status.Location)
 				}
 				fmt.Fprintln(w)
 			} else {
-				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons["polecat"], style.Bold.Render("Polecats"), len(polecats))
+				fmt.Fprintf(w, "%s %s (%d)\n", roleIcons[constants.RolePolecat], style.Bold.Render("Polecats"), len(polecats))
 				for _, agent := range polecats {
 					renderAgentCompact(w, agent, "   ", r.Hooks, status.Location)
 				}
@@ -1161,11 +1161,11 @@ func renderAgentDetails(w io.Writer, agent AgentRuntime, indent string, hooks []
 		} else if len(parts) >= 2 {
 			rig := parts[0]
 			prefix := beads.GetPrefixForRig(townRoot, rig)
-			if parts[1] == "crew" && len(parts) >= 3 {
+			if parts[1] == constants.RoleCrew && len(parts) >= 3 {
 				agentBeadID = beads.CrewBeadIDWithPrefix(prefix, rig, parts[2])
-			} else if parts[1] == "witness" {
+			} else if parts[1] == constants.RoleWitness {
 				agentBeadID = beads.WitnessBeadIDWithPrefix(prefix, rig)
-			} else if parts[1] == "refinery" {
+			} else if parts[1] == constants.RoleRefinery {
 				agentBeadID = beads.RefineryBeadIDWithPrefix(prefix, rig)
 			} else if len(parts) == 2 {
 				// polecat: rig/name
@@ -1433,25 +1433,25 @@ func discoverRigHooks(r *rig.Rig, crews []string) []AgentHookInfo {
 
 	// Check polecats
 	for _, name := range r.Polecats {
-		hook := getAgentHook(b, name, r.Name+"/"+name, "polecat")
+		hook := getAgentHook(b, name, r.Name+"/"+name, constants.RolePolecat)
 		hooks = append(hooks, hook)
 	}
 
 	// Check crew workers
 	for _, name := range crews {
-		hook := getAgentHook(b, name, r.Name+"/crew/"+name, "crew")
+		hook := getAgentHook(b, name, r.Name+"/crew/"+name, constants.RoleCrew)
 		hooks = append(hooks, hook)
 	}
 
 	// Check witness
 	if r.HasWitness {
-		hook := getAgentHook(b, "witness", r.Name+"/witness", "witness")
+		hook := getAgentHook(b, constants.RoleWitness, r.Name+"/witness", constants.RoleWitness)
 		hooks = append(hooks, hook)
 	}
 
 	// Check refinery
 	if r.HasRefinery {
-		hook := getAgentHook(b, "refinery", r.Name+"/refinery", "refinery")
+		hook := getAgentHook(b, constants.RoleRefinery, r.Name+"/refinery", constants.RoleRefinery)
 		hooks = append(hooks, hook)
 	}
 
@@ -1477,8 +1477,8 @@ func discoverGlobalAgents(allSessions map[string]bool, allAgentBeads map[string]
 		role    string
 		beadID  string
 	}{
-		{"mayor", "mayor/", mayorSession, "coordinator", beads.MayorBeadIDTown()},
-		{"deacon", "deacon/", deaconSession, "health-check", beads.DeaconBeadIDTown()},
+		{constants.RoleMayor, constants.RoleMayor + "/", mayorSession, "coordinator", beads.MayorBeadIDTown()},
+		{constants.RoleDeacon, constants.RoleDeacon + "/", deaconSession, "health-check", beads.DeaconBeadIDTown()},
 	}
 
 	agents := make([]AgentRuntime, len(agentDefs))
@@ -1581,10 +1581,10 @@ func discoverRigAgents(allSessions map[string]bool, r *rig.Rig, crews []string, 
 	// Witness
 	if r.HasWitness {
 		defs = append(defs, agentDef{
-			name:    "witness",
+			name:    constants.RoleWitness,
 			address: r.Name + "/witness",
 			session: witnessSessionName(r.Name),
-			role:    "witness",
+			role:    constants.RoleWitness,
 			beadID:  beads.WitnessBeadIDWithPrefix(prefix, r.Name),
 		})
 	}
@@ -1592,10 +1592,10 @@ func discoverRigAgents(allSessions map[string]bool, r *rig.Rig, crews []string, 
 	// Refinery
 	if r.HasRefinery {
 		defs = append(defs, agentDef{
-			name:    "refinery",
+			name:    constants.RoleRefinery,
 			address: r.Name + "/refinery",
 			session: session.RefinerySessionName(session.PrefixFor(r.Name)),
-			role:    "refinery",
+			role:    constants.RoleRefinery,
 			beadID:  beads.RefineryBeadIDWithPrefix(prefix, r.Name),
 		})
 	}
@@ -1606,7 +1606,7 @@ func discoverRigAgents(allSessions map[string]bool, r *rig.Rig, crews []string, 
 			name:    name,
 			address: r.Name + "/" + name,
 			session: session.PolecatSessionName(session.PrefixFor(r.Name), name),
-			role:    "polecat",
+			role:    constants.RolePolecat,
 			beadID:  beads.PolecatBeadIDWithPrefix(prefix, r.Name, name),
 		})
 	}
@@ -1617,7 +1617,7 @@ func discoverRigAgents(allSessions map[string]bool, r *rig.Rig, crews []string, 
 			name:    name,
 			address: r.Name + "/crew/" + name,
 			session: crewSessionName(r.Name, name),
-			role:    "crew",
+			role:    constants.RoleCrew,
 			beadID:  beads.CrewBeadIDWithPrefix(prefix, r.Name, name),
 		})
 	}

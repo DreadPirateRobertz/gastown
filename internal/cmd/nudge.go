@@ -255,7 +255,7 @@ func runNudge(cmd *cobra.Command, args []string) (retErr error) {
 	if roleInfo, err := GetRole(); err == nil {
 		switch roleInfo.Role {
 		case RoleMayor:
-			sender = "mayor"
+			sender = constants.RoleMayor
 		case RoleCrew:
 			sender = fmt.Sprintf("%s/crew/%s", roleInfo.Rig, roleInfo.Polecat)
 		case RolePolecat:
@@ -265,7 +265,7 @@ func runNudge(cmd *cobra.Command, args []string) (retErr error) {
 		case RoleRefinery:
 			sender = fmt.Sprintf("%s/refinery", roleInfo.Rig)
 		case RoleDeacon:
-			sender = "deacon"
+			sender = constants.RoleDeacon
 		default:
 			sender = string(roleInfo.Role)
 		}
@@ -334,9 +334,9 @@ func runNudge(cmd *cobra.Command, args []string) (retErr error) {
 
 		// Log nudge event
 		if townRoot, err := workspace.FindFromCwd(); err == nil && townRoot != "" {
-			_ = LogNudge(townRoot, "deacon", message)
+			_ = LogNudge(townRoot, constants.RoleDeacon, message)
 		}
-		_ = events.LogFeed(events.TypeNudge, sender, events.NudgePayload("", "deacon", message))
+		_ = events.LogFeed(events.TypeNudge, sender, events.NudgePayload("", constants.RoleDeacon, message))
 		return nil
 	}
 
@@ -594,11 +594,11 @@ func resolveNudgePattern(pattern string, agents []*AgentSession) []string {
 			if suffix != "*" && suffix != agent.AgentName {
 				continue
 			}
-		} else if targetPattern == "witness" {
+		} else if targetPattern == constants.RoleWitness {
 			if agent.Type != AgentWitness {
 				continue
 			}
-		} else if targetPattern == "refinery" {
+		} else if targetPattern == constants.RoleRefinery {
 			if agent.Type != AgentRefinery {
 				continue
 			}
@@ -659,9 +659,9 @@ func sessionNameToAddress(sessionName string) string {
 	// Use short address format: rig/name (not rig/polecats/name)
 	switch identity.Role {
 	case session.RoleMayor:
-		return "mayor"
+		return constants.RoleMayor
 	case session.RoleDeacon:
-		return "deacon"
+		return constants.RoleDeacon
 	case session.RoleWitness:
 		return fmt.Sprintf("%s/witness", identity.Rig)
 	case session.RoleRefinery:

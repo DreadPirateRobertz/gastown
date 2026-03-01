@@ -72,14 +72,14 @@ func AgentEnv(cfg AgentEnvConfig) map[string]string {
 	// beads can parse it without knowing about Gas Town role types.
 	switch cfg.Role {
 	case constants.RoleMayor:
-		env["GT_ROLE"] = "mayor"
-		env["BD_ACTOR"] = "mayor"
-		env["GIT_AUTHOR_NAME"] = "mayor"
+		env["GT_ROLE"] = constants.RoleMayor
+		env["BD_ACTOR"] = constants.RoleMayor
+		env["GIT_AUTHOR_NAME"] = constants.RoleMayor
 
 	case constants.RoleDeacon:
-		env["GT_ROLE"] = "deacon"
-		env["BD_ACTOR"] = "deacon"
-		env["GIT_AUTHOR_NAME"] = "deacon"
+		env["GT_ROLE"] = constants.RoleDeacon
+		env["BD_ACTOR"] = constants.RoleDeacon
+		env["GIT_AUTHOR_NAME"] = constants.RoleDeacon
 
 	case "boot":
 		env["GT_ROLE"] = "deacon/boot"
