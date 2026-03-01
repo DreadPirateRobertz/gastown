@@ -28,6 +28,13 @@ func EnsureConfigYAMLFromMetadataIfMissing(beadsDir, fallbackPrefix string) erro
 	return ensureConfigYAML(beadsDir, prefix, syncMode, true)
 }
 
+// ConfigPrefixFromDir reads the database prefix from a beads directory's metadata.
+// Returns "hq" as default if the prefix cannot be determined.
+func ConfigPrefixFromDir(beadsDir string) string {
+	prefix, _ := ConfigDefaultsFromMetadata(beadsDir, "hq")
+	return prefix
+}
+
 // ConfigDefaultsFromMetadata derives config.yaml defaults from metadata.json.
 // Falls back to fallbackPrefix and dolt-native sync mode when fields are absent.
 func ConfigDefaultsFromMetadata(beadsDir, fallbackPrefix string) (prefix string, syncMode string) {

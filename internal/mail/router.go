@@ -207,6 +207,12 @@ func (r *Router) resolveBeadsDir() string {
 	return filepath.Join(r.townRoot, ".beads")
 }
 
+// readBeadsPrefix reads the database prefix from a beads directory.
+// Returns "hq" as default if the prefix cannot be determined.
+func readBeadsPrefix(beadsDir string) string {
+	return beads.ConfigPrefixFromDir(beadsDir)
+}
+
 func (r *Router) ensureCustomTypes(beadsDir string) error {
 	if err := beads.EnsureCustomTypes(beadsDir); err != nil {
 		return fmt.Errorf("ensuring custom types: %w", err)
@@ -1036,10 +1042,15 @@ func (r *Router) resolveCrewShorthand(identity string) string {
 
 // sendToSingle sends a message to a single recipient.
 func (r *Router) sendToSingle(msg *Message) error {
+	// Resolve beads dir early — we need it for prefix-aware ID generation.
+	beadsDir := r.resolveBeadsDir()
+
 	// Ensure message has an ID — we pass it explicitly via --id to bd create
 	// because the ephemeral insert path may not read the prefix from config.yaml.
-	if msg.ID == "" {
-		msg.ID = GenerateID()
+	// The ID must match the database prefix (e.g., "hq-wisp-*" for HQ beads).
+	if msg.ID == "" || strings.HasPrefix(msg.ID, "msg-") {
+		prefix := readBeadsPrefix(beadsDir)
+		msg.ID = GeneratePrefixedID(prefix, r.shouldBeWisp(msg))
 	}
 
 	// Validate message before sending
@@ -1106,7 +1117,6 @@ func (r *Router) sendToSingle(msg *Message) error {
 	// This prevents subjects like "--help" or "--json" from being parsed as flags.
 	args = append(args, "--", msg.Subject)
 
-	beadsDir := r.resolveBeadsDir()
 	if err := r.ensureCustomTypes(beadsDir); err != nil {
 		return err
 	}

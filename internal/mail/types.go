@@ -267,17 +267,38 @@ func (m *Message) Validate() error {
 	return nil
 }
 
-// GenerateID creates a random message ID.
+// GenerateID creates a random message ID with "msg-" prefix.
 // Falls back to time-based ID if crypto/rand fails (extremely rare).
 // Exported so callers that bypass the mail router (e.g., handoff) can
 // pass an explicit --id to bd create, avoiding the ephemeral empty-ID bug.
+//
+// WARNING: "msg-" IDs will fail prefix validation when stored in a
+// prefix-enforcing database (e.g., HQ uses "hq-"). Prefer
+// GeneratePrefixedID when the target database prefix is known.
 func GenerateID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback to time-based ID instead of panicking
 		return fmt.Sprintf("msg-%x", time.Now().UnixNano())
 	}
 	return "msg-" + hex.EncodeToString(b)
+}
+
+// GeneratePrefixedID creates a random message ID matching the target database prefix.
+// For wisps (ephemeral messages): "{prefix}-wisp-{random}" (e.g., "hq-wisp-a1b2c3").
+// For permanent messages: "{prefix}-{random}" (e.g., "hq-a1b2c3d4e5f6").
+func GeneratePrefixedID(prefix string, isWisp bool) string {
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		if isWisp {
+			return fmt.Sprintf("%s-wisp-%x", prefix, time.Now().UnixNano()&0xFFFFFF)
+		}
+		return fmt.Sprintf("%s-%x", prefix, time.Now().UnixNano())
+	}
+	id := hex.EncodeToString(b)
+	if isWisp {
+		return prefix + "-wisp-" + id
+	}
+	return prefix + "-" + id
 }
 
 // generateThreadID creates a random thread ID.
