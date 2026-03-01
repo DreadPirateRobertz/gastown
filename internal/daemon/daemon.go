@@ -1558,7 +1558,6 @@ func IsRunning(townRoot string) (bool, int, error) {
 		// PID reused by different process — clean up stale PID file.
 		os.Remove(pidFile) // best-effort cleanup
 		return false, 0, nil
-		return false, 0, nil
 	}
 
 	return true, pid, nil
