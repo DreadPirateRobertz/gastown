@@ -25,7 +25,7 @@ const (
 	gitPushTimeout                = 120 * time.Second
 	gitCmdTimeout                 = 30 * time.Second
 	maxConsecutivePushFailures    = 3
-	defaultSpikeThreshold         = 0.20 // 20% delta triggers halt
+	defaultSpikeThreshold         = 0.50 // 50% delta triggers halt (was 20%, too sensitive for bulk ops)
 )
 
 // testPollutionPatterns matches issue IDs or titles that indicate test data leaked
@@ -533,7 +533,14 @@ type spikeInfo struct {
 // verifyExportCounts compares current export line counts against the previous
 // commit for each database. Returns a list of anomalies that exceed the spike
 // threshold. On first export (no baseline), verification is skipped.
+//
+// Asymmetric thresholds: drops (possible data loss) use the configured threshold;
+// increases (new issues filed) use 2x the threshold since growth is normal.
+// Small absolute changes (<20 records) are always allowed to avoid false alarms
+// on small databases.
 func (d *Daemon) verifyExportCounts(gitRepo string, databases []string, counts map[string]int, threshold float64) []spikeInfo {
+	const minAbsoluteDelta = 20 // ignore changes smaller than this many records
+
 	var spikes []spikeInfo
 
 	for _, db := range databases {
@@ -554,14 +561,32 @@ func (d *Daemon) verifyExportCounts(gitRepo string, databases []string, counts m
 			continue
 		}
 
-		delta := math.Abs(float64(currentCount-prevCount)) / float64(prevCount)
-		if delta > threshold {
+		absDelta := currentCount - prevCount
+		if absDelta < 0 {
+			absDelta = -absDelta
+		}
+		// Small absolute changes are always fine — avoids false alarms on
+		// small databases where a few issues cause large percentage swings.
+		if absDelta < minAbsoluteDelta {
+			continue
+		}
+
+		fractionalDelta := math.Abs(float64(currentCount-prevCount)) / float64(prevCount)
+
+		// Asymmetric: increases are less suspicious than drops.
+		// New issues being filed is normal growth; losing issues suggests data loss.
+		effectiveThreshold := threshold
+		if currentCount > prevCount {
+			effectiveThreshold = threshold * 2 // 2x tolerance for growth
+		}
+
+		if fractionalDelta > effectiveThreshold {
 			spike := spikeInfo{
 				DB:       db,
 				File:     relPath,
 				Previous: prevCount,
 				Current:  currentCount,
-				Delta:    delta,
+				Delta:    fractionalDelta,
 			}
 			spikes = append(spikes, spike)
 
@@ -570,7 +595,7 @@ func (d *Daemon) verifyExportCounts(gitRepo string, databases []string, counts m
 				direction = "drop"
 			}
 			d.logger.Printf("jsonl_git_backup: SPIKE DETECTED: %s: %s from %d to %d (%.1f%% %s, threshold %.1f%%)",
-				db, direction, prevCount, currentCount, delta*100, direction, threshold*100)
+				db, direction, prevCount, currentCount, fractionalDelta*100, direction, effectiveThreshold*100)
 		}
 	}
 	return spikes
