@@ -152,6 +152,7 @@ func TestAcceptWorkspaceTrustDialog_InvalidSession(t *testing.T) {
 // TestContainsPromptIndicator verifies the prompt detection helper
 // recognizes various shell and agent prompt patterns.
 func TestContainsPromptIndicator(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		content string
