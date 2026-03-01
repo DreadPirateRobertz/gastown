@@ -81,7 +81,7 @@ esac
 	return binDir, townBeads, closeLogPath
 }
 
-func TestCheckSingleConvoy_EmptyConvoyAutoCloses(t *testing.T) {
+func TestCheckSingleConvoy_EmptyConvoySkips(t *testing.T) {
 	_, townBeads, closeLogPath := mockBdForConvoyTest(t, "hq-empty1", "Empty test convoy")
 
 	err := checkSingleConvoy(townBeads, "hq-empty1", false)
@@ -89,17 +89,11 @@ func TestCheckSingleConvoy_EmptyConvoyAutoCloses(t *testing.T) {
 		t.Fatalf("checkSingleConvoy() error: %v", err)
 	}
 
-	// Verify bd close was called with the empty-convoy reason
-	data, err := os.ReadFile(closeLogPath)
-	if err != nil {
-		t.Fatalf("reading close log: %v", err)
-	}
-	log := string(data)
-	if !strings.Contains(log, "hq-empty1") {
-		t.Errorf("close log should contain convoy ID, got: %q", log)
-	}
-	if !strings.Contains(log, "Empty convoy") {
-		t.Errorf("close log should contain empty-convoy reason, got: %q", log)
+	// Verify bd close was NOT called — empty convoys must not be auto-closed
+	// because getTrackedIssues can return 0 transiently (Dolt snapshot races).
+	_, err = os.ReadFile(closeLogPath)
+	if err == nil {
+		t.Error("empty convoy should NOT be auto-closed, but close log exists")
 	}
 }
 

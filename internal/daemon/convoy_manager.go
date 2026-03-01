@@ -23,10 +23,11 @@ const (
 
 // strandedConvoyInfo matches the JSON output of `gt convoy stranded --json`.
 type strandedConvoyInfo struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	ReadyCount  int      `json:"ready_count"`
-	ReadyIssues []string `json:"ready_issues"`
+	ID           string   `json:"id"`
+	Title        string   `json:"title"`
+	TrackedCount int      `json:"tracked_count"`
+	ReadyCount   int      `json:"ready_count"`
+	ReadyIssues  []string `json:"ready_issues"`
 }
 
 // ConvoyManager monitors beads events for issue closes and periodically scans for stranded convoys.
@@ -352,8 +353,13 @@ func (m *ConvoyManager) scan() {
 
 		if c.ReadyCount > 0 {
 			m.feedFirstReady(c)
+		} else if c.TrackedCount == 0 {
+			// Empty convoy (0 tracked issues) — do NOT auto-close.
+			// getTrackedIssues can return 0 transiently (Dolt snapshot races).
+			m.logger("Convoy %s: 0 tracked issues, skipping (will not auto-close)", c.ID)
 		} else {
-			m.closeEmptyConvoy(c.ID)
+			// Stuck convoy: has tracked issues but none are ready to dispatch.
+			m.logger("Convoy %s: stuck (%d tracked, 0 ready)", c.ID, c.TrackedCount)
 		}
 	}
 }
@@ -427,20 +433,7 @@ func (m *ConvoyManager) feedFirstReady(c strandedConvoyInfo) {
 	m.logger("Convoy %s: no dispatchable issues (all %d skipped)", c.ID, len(c.ReadyIssues))
 }
 
-// closeEmptyConvoy runs gt convoy check to auto-close an empty convoy.
-func (m *ConvoyManager) closeEmptyConvoy(convoyID string) {
-	m.logger("Convoy %s: auto-closing (empty)", convoyID)
 
-	cmd := exec.CommandContext(m.ctx, m.gtPath, "convoy", "check", convoyID)
-	cmd.Dir = m.townRoot
-	util.SetProcessGroup(cmd)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		m.logger("Convoy %s: check failed: %s", convoyID, util.FirstLine(stderr.String()))
-	}
-}
 
 // runStartupSweep runs one convoy check pass after a brief delay to catch
 // convoys that completed while the daemon was stopped or Dolt was unavailable.

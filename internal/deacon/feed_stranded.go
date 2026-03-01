@@ -242,22 +242,14 @@ func FeedStranded(townRoot string, maxPerCycle int, cooldown time.Duration) *Fee
 				continue
 			}
 
-			// Truly empty convoy (0 tracked issues) — auto-close
-			if err := closeEmptyConvoy(townRoot, convoy.ID); err != nil {
-				result.Errors++
-				result.Details = append(result.Details, FeedConvoyResult{
-					ConvoyID: convoy.ID,
-					Action:   "error",
-					Message:  fmt.Sprintf("failed to auto-close empty convoy: %v", err),
-				})
-			} else {
-				result.Closed++
-				result.Details = append(result.Details, FeedConvoyResult{
-					ConvoyID: convoy.ID,
-					Action:   "closed",
-					Message:  "auto-closed empty convoy (0 tracked issues)",
-				})
-			}
+			// Truly empty convoy (0 tracked issues) — do NOT auto-close.
+			// getTrackedIssues can return 0 transiently (Dolt snapshot races,
+			// bd dep list returning empty). Log a warning and skip.
+			result.Details = append(result.Details, FeedConvoyResult{
+				ConvoyID: convoy.ID,
+				Action:   "empty",
+				Message:  "convoy has 0 tracked issues — skipping (will not auto-close)",
+			})
 			continue
 		}
 
@@ -314,15 +306,6 @@ func FeedStranded(townRoot string, maxPerCycle int, cooldown time.Duration) *Fee
 	}
 
 	return result
-}
-
-// closeEmptyConvoy runs `gt convoy check <id>` to auto-close an empty convoy.
-func closeEmptyConvoy(townRoot, convoyID string) error {
-	cmd := exec.Command("gt", "convoy", "check", convoyID)
-	cmd.Dir = townRoot
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
 
 // dispatchFeedDog dispatches a dog to feed a stranded convoy via gt sling.
