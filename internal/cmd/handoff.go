@@ -18,6 +18,7 @@ import (
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/style"
 	"github.com/steveyegge/gastown/internal/tmux"
+	"github.com/steveyegge/gastown/internal/ui"
 	"github.com/steveyegge/gastown/internal/workspace"
 )
 
@@ -1271,17 +1272,17 @@ func warnHandoffGitStatus() {
 	if err != nil || status.CleanExcludingBeads() {
 		return
 	}
-	style.PrintWarning("workspace has uncommitted work: %s", status.String())
+	fmt.Fprintf(os.Stderr, "%s workspace has uncommitted work: %s\n", ui.IconWarn, status.String())
 	if len(status.ModifiedFiles) > 0 {
-		style.PrintWarning("  modified: %s", strings.Join(status.ModifiedFiles, ", "))
+		fmt.Fprintf(os.Stderr, "%s   modified: %s\n", ui.IconWarn, strings.Join(status.ModifiedFiles, ", "))
 	}
 	if len(status.UntrackedFiles) > 0 {
-		style.PrintWarning("  untracked: %s", strings.Join(status.UntrackedFiles, ", "))
+		fmt.Fprintf(os.Stderr, "%s   untracked: %s\n", ui.IconWarn, strings.Join(status.UntrackedFiles, ", "))
 	}
 	if status.UnpushedCommits > 0 {
-		style.PrintWarning("  %d unpushed commit(s) — run 'git push' before handoff", status.UnpushedCommits)
+		fmt.Fprintf(os.Stderr, "%s   %d unpushed commit(s) — run 'git push' before handoff\n", ui.IconWarn, status.UnpushedCommits)
 	}
-	fmt.Println("  (use --no-git-check to suppress this warning)")
+	fmt.Fprintln(os.Stderr, "  (use --no-git-check to suppress this warning)")
 }
 
 // looksLikeBeadID checks if a string looks like a bead ID.
