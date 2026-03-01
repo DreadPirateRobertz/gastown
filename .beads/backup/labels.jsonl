@@ -36,6 +36,7 @@
 {"issue_id":"gt-eo8d","label":"test-failure"}
 {"issue_id":"gt-f6mkz","label":"design"}
 {"issue_id":"gt-f6mkz","label":"prerequisite"}
+{"issue_id":"gt-fj87","label":"zfc"}
 {"issue_id":"gt-gastown-crew-dennis","label":"gt:agent"}
 {"issue_id":"gt-gastown-crew-george","label":"gt:agent"}
 {"issue_id":"gt-gastown-crew-gus","label":"gt:agent"}
@@ -49,7 +50,6 @@
 {"issue_id":"gt-gastown-polecat-coma","label":"gt:agent"}
 {"issue_id":"gt-gastown-polecat-dag","label":"gt:agent"}
 {"issue_id":"gt-gastown-polecat-dementus","label":"gt:agent"}
-{"issue_id":"gt-gastown-polecat-furiosa","label":"gt:agent"}
 {"issue_id":"gt-gastown-polecat-furiosa","label":"gt:agent"}
 {"issue_id":"gt-gastown-polecat-keeper","label":"gt:agent"}
 {"issue_id":"gt-gastown-polecat-nux","label":"gt:agent"}
@@ -117,6 +117,7 @@
 {"issue_id":"gt-rig-gastown","label":"gt:rig"}
 {"issue_id":"gt-s4fcs","label":"seance"}
 {"issue_id":"gt-s4fcs","label":"ux"}
+{"issue_id":"gt-sm59","label":"enhancement"}
 {"issue_id":"gt-td6p","label":"formula"}
 {"issue_id":"gt-tsut","label":"zfc-violation"}
 {"issue_id":"gt-utbjv","label":"worker-lifecycle"}
