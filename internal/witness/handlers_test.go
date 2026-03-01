@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/gastown/internal/beads"
+	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/tmux"
 )
 
@@ -887,18 +888,21 @@ func TestDetectStalledPolecats_NoSession(t *testing.T) {
 
 func TestStartupStallThresholds(t *testing.T) {
 	t.Parallel()
-	// Verify thresholds are reasonable
-	if StartupStallThreshold < 30*time.Second {
-		t.Errorf("StartupStallThreshold = %v, too short (< 30s)", StartupStallThreshold)
+	// Verify config defaults are reasonable
+	witCfg := &config.WitnessThresholds{}
+	stallThreshold := witCfg.StartupStallThresholdD()
+	activityGrace := witCfg.StartupActivityGraceD()
+	if stallThreshold < 30*time.Second {
+		t.Errorf("StartupStallThreshold = %v, too short (< 30s)", stallThreshold)
 	}
-	if StartupStallThreshold > 5*time.Minute {
-		t.Errorf("StartupStallThreshold = %v, too long (> 5min)", StartupStallThreshold)
+	if stallThreshold > 5*time.Minute {
+		t.Errorf("StartupStallThreshold = %v, too long (> 5min)", stallThreshold)
 	}
-	if StartupActivityGrace < 15*time.Second {
-		t.Errorf("StartupActivityGrace = %v, too short (< 15s)", StartupActivityGrace)
+	if activityGrace < 15*time.Second {
+		t.Errorf("StartupActivityGrace = %v, too short (< 15s)", activityGrace)
 	}
-	if StartupActivityGrace > 5*time.Minute {
-		t.Errorf("StartupActivityGrace = %v, too long (> 5min)", StartupActivityGrace)
+	if activityGrace > 5*time.Minute {
+		t.Errorf("StartupActivityGrace = %v, too long (> 5min)", activityGrace)
 	}
 }
 

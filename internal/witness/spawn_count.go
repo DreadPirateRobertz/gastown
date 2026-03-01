@@ -15,11 +15,6 @@ import (
 // load-modify-save cycles from losing respawn count increments.
 var respawnMu sync.Mutex
 
-// defaultMaxBeadRespawns is the threshold above which a SPAWN_STORM warning is
-// included in the RECOVERED_BEAD mail sent to deacon. It does not block respawns
-// — the intent is audit visibility so deacon/mayor can investigate.
-const defaultMaxBeadRespawns = 2
-
 // beadRespawnRecord tracks how many times a single bead has been reset for re-dispatch.
 type beadRespawnRecord struct {
 	BeadID      string    `json:"bead_id"`

@@ -1016,7 +1016,7 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 			continue // Either handled or not a zombie
 		}
 
-		if zombie, found := detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, sessionName, t, doneIntent, detectedAt); found {
+		if zombie, found := detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, sessionName, t, doneIntent, detectedAt, witCfg); found {
 			result.Zombies = append(result.Zombies, zombie)
 		}
 	}
@@ -1097,11 +1097,11 @@ func detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, session
 //
 // gt-dsgp: Uses restart-first policy. Instead of nuking polecats with dead sessions,
 // restarts them to preserve worktrees and branches.
-func detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, sessionName string, t *tmux.Tmux, doneIntent *DoneIntent, detectedAt time.Time) (ZombieResult, bool) {
+func detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, sessionName string, t *tmux.Tmux, doneIntent *DoneIntent, detectedAt time.Time, witCfg *config.WitnessThresholds) (ZombieResult, bool) {
 	// Done-intent: polecat was trying to exit.
 	if doneIntent != nil {
 		age := time.Since(doneIntent.Timestamp)
-		if age < 30*time.Second {
+		if age < witCfg.DoneIntentRecentGraceD() {
 			return ZombieResult{}, false // Recent — still working through gt done
 		}
 		diAgentState, diHookBead := getAgentBeadState(workDir, agentBeadID)
@@ -1224,16 +1224,6 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 	}
 }
 
-// StartupStallThreshold is the minimum session age before a session with no
-// recent tmux activity is considered stalled at startup. Sessions younger than
-// this are still in normal startup and should not be flagged.
-const StartupStallThreshold = 90 * time.Second
-
-// StartupActivityGrace is the maximum time since last tmux activity before
-// a session old enough to be past startup is considered stalled. If the session
-// has had tmux activity within this window, it's making progress.
-const StartupActivityGrace = 60 * time.Second
-
 // StalledResult represents a single stalled polecat detection.
 type StalledResult struct {
 	PolecatName string // e.g., "alpha"
@@ -1256,8 +1246,8 @@ type DetectStalledPolecatsResult struct {
 //
 // Detection uses structured tmux signals (session creation time + last activity)
 // rather than screen-scraping pane content. A session is considered stalled when:
-//   - It is older than StartupStallThreshold (90s)
-//   - Its last tmux activity is older than StartupActivityGrace (60s)
+//   - It is older than the configured startup stall threshold (default 90s)
+//   - Its last tmux activity is older than the configured activity grace (default 60s)
 //
 // When a startup stall is detected, DismissStartupDialogsBlind is called to
 // send blind key sequences that dismiss known blocking dialogs (workspace trust,
@@ -1607,7 +1597,7 @@ func getBeadStatus(workDir, beadID string) string {
 // 2. Resets status to open
 // 3. Clears assignee
 // 4. Sends mail to deacon for re-dispatch (includes respawn count; SPAWN_STORM
-//    prefix and Urgent priority when count exceeds defaultMaxBeadRespawns)
+//    prefix and Urgent priority when count exceeds the configured max respawns)
 // Returns true if the bead was recovered.
 func resetAbandonedBead(workDir, rigName, hookBead, polecatName string, router *mail.Router) bool {
 	if hookBead == "" {
