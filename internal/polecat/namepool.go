@@ -13,9 +13,9 @@ import (
 
 const (
 	// DefaultPoolSize is the number of name slots in the pool.
-	// NOTE: This is a pool of NAMES, not polecats. Polecats are spawned fresh
-	// for each task and nuked when done - there is no idle pool of polecats.
-	// Only the name slots are reused when a polecat is nuked and a new one spawned.
+	// Names are allocated when a polecat is first created. In the persistent
+	// polecat model (gt-4ac), polecats cycle IDLE → WORKING → DONE → IDLE,
+	// keeping their name, identity, and sandbox across assignments.
 	DefaultPoolSize = 50
 
 	// DefaultTheme is the default theme for new rigs.
@@ -73,11 +73,10 @@ var BuiltinThemes = map[string][]string{
 	},
 }
 
-// NamePool manages a bounded pool of reusable polecat NAME SLOTS.
-// IMPORTANT: This pools NAMES, not polecats. Polecats are spawned fresh for each
-// task and nuked when done - there is no idle pool of polecat instances waiting
-// for work. When a polecat is nuked, its name slot becomes available for the next
-// freshly-spawned polecat.
+// NamePool manages a bounded pool of reusable polecat names.
+// Names are allocated once per polecat and persist across assignments in the
+// persistent polecat model (gt-4ac). A name slot is only freed when a polecat
+// is explicitly nuked.
 //
 // Names are drawn from a themed pool (mad-max by default).
 // When the pool is exhausted, overflow names use N format (just numbers).
