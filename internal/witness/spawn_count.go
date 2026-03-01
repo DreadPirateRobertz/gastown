@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/steveyegge/gastown/internal/workspace"
 )
+
+// respawnMu serializes recordBeadRespawn calls to prevent concurrent
+// load-modify-save cycles from losing respawn count increments.
+var respawnMu sync.Mutex
 
 // defaultMaxBeadRespawns is the threshold above which a SPAWN_STORM warning is
 // included in the RECOVERED_BEAD mail sent to deacon. It does not block respawns
@@ -64,7 +69,13 @@ func saveBeadRespawnState(townRoot string, state *beadRespawnState) error {
 // workDir is the rig path; townRoot is resolved internally via workspace.Find.
 // On state file errors the count is still incremented in memory and returned, so the
 // caller can log/warn without blocking the respawn itself.
+//
+// Serialized via respawnMu to prevent concurrent patrol cycles from racing on
+// the load-modify-save cycle and losing count increments.
 func recordBeadRespawn(workDir, beadID string) int {
+	respawnMu.Lock()
+	defer respawnMu.Unlock()
+
 	townRoot, err := workspace.Find(workDir)
 	if err != nil || townRoot == "" {
 		townRoot = workDir

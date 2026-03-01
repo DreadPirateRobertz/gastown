@@ -217,7 +217,13 @@ func handlePolecatDonePendingMR(workDir, rigName string, payload *PolecatDonePay
 		result.Error = fmt.Errorf("updating wisp state: %w", err)
 	}
 
+	// notifyRefineryMergeReady may set result.Error; only overwrite if no
+	// prior error was recorded, so the first failure is preserved.
+	prevErr := result.Error
 	notifyRefineryMergeReady(workDir, rigName, result)
+	if prevErr != nil && result.Error != prevErr {
+		result.Error = fmt.Errorf("%w; also: %v", prevErr, result.Error)
+	}
 
 	result.Handled = true
 	result.WispCreated = wispID
@@ -1152,7 +1158,6 @@ func isZombieState(agentState, hookBead string) bool {
 
 // handleZombieRestart determines the restart action for a confirmed zombie (gt-dsgp).
 // Clean or empty status → restart session. Dirty status → escalate AND restart.
-// This replaces the old handleZombieCleanup nuke behavior.
 func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus string, zombie *ZombieResult) {
 	switch cleanupStatus {
 	case "clean", "":
@@ -1171,6 +1176,7 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 		if existingWisp != "" {
 			zombie.Action = fmt.Sprintf("already-tracked (cleanup_status=%s, existing-wisp=%s)", cleanupStatus, existingWisp)
 		} else {
+			var errs []error
 			_, escErr := EscalateRecoveryNeeded(workDir, rigName, &RecoveryPayload{
 				PolecatName:   polecatName,
 				Rig:           rigName,
@@ -1179,69 +1185,27 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 				DetectedAt:    time.Now(),
 			})
 			if escErr != nil {
-				zombie.Error = escErr
+				errs = append(errs, fmt.Errorf("escalation: %w", escErr))
 			}
 			wispID, wispErr := createCleanupWisp(workDir, polecatName, hookBead, "")
-			if wispErr != nil && zombie.Error == nil {
-				zombie.Error = wispErr
+			if wispErr != nil {
+				errs = append(errs, fmt.Errorf("cleanup wisp: %w", wispErr))
+			}
+			if len(errs) == 1 {
+				zombie.Error = errs[0]
+			} else if len(errs) > 1 {
+				zombie.Error = fmt.Errorf("%w; also: %v", errs[0], errs[1])
 			}
 			zombie.Action = fmt.Sprintf("escalated-and-restarted (cleanup_status=%s, wisp=%s)", cleanupStatus, wispID)
 		}
 		// Restart regardless of escalation — the worktree is preserved
 		if err := RestartPolecatSession(workDir, rigName, polecatName); err != nil {
 			if zombie.Error == nil {
-				zombie.Error = err
+				zombie.Error = fmt.Errorf("restart: %w", err)
+			} else {
+				zombie.Error = fmt.Errorf("%w; also restart: %v", zombie.Error, err)
 			}
 		}
-	}
-}
-
-// handleZombieCleanup determines the cleanup action for a confirmed zombie based on
-// its cleanup_status. Clean or empty status → auto-nuke. Dirty status → escalate.
-// DEPRECATED (gt-dsgp): Use handleZombieRestart instead. This function is preserved
-// for backward compatibility with any callers that still reference it.
-func handleZombieCleanup(workDir, rigName, polecatName, hookBead, cleanupStatus string, zombie *ZombieResult) {
-	switch cleanupStatus {
-	case "clean", "":
-		// Clean state or no cleanup info — try auto-nuke.
-		// Empty status means polecat crashed before gt done; AutoNukeIfClean
-		// uses verifyCommitOnMain as fallback.
-		nukeResult := AutoNukeIfClean(workDir, rigName, polecatName)
-		if nukeResult.Nuked {
-			zombie.Action = "auto-nuked"
-		} else if nukeResult.Skipped {
-			wispID, wispErr := createCleanupWisp(workDir, polecatName, hookBead, "")
-			if wispErr != nil {
-				zombie.Error = wispErr
-			}
-			zombie.Action = fmt.Sprintf("cleanup-wisp-created:%s (skip reason: %s)", wispID, nukeResult.Reason)
-		} else if nukeResult.Error != nil {
-			zombie.Error = nukeResult.Error
-			zombie.Action = "nuke-failed"
-		}
-
-	case "has_uncommitted", "has_stash", "has_unpushed":
-		// Dirty state — escalate, but check for existing wisp to prevent loops.
-		existingWisp := findAnyCleanupWisp(workDir, polecatName)
-		if existingWisp != "" {
-			zombie.Action = fmt.Sprintf("already-tracked (cleanup_status=%s, existing-wisp=%s)", cleanupStatus, existingWisp)
-			return
-		}
-		_, escErr := EscalateRecoveryNeeded(workDir, rigName, &RecoveryPayload{
-			PolecatName:   polecatName,
-			Rig:           rigName,
-			CleanupStatus: cleanupStatus,
-			IssueID:       hookBead,
-			DetectedAt:    time.Now(),
-		})
-		if escErr != nil {
-			zombie.Error = escErr
-		}
-		wispID, wispErr := createCleanupWisp(workDir, polecatName, hookBead, "")
-		if wispErr != nil && zombie.Error == nil {
-			zombie.Error = wispErr
-		}
-		zombie.Action = fmt.Sprintf("escalated (cleanup_status=%s, wisp=%s)", cleanupStatus, wispID)
 	}
 }
 
