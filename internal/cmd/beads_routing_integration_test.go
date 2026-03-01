@@ -602,6 +602,101 @@ func TestSlingCrossRigUnknownPrefix(t *testing.T) {
 	}
 }
 
+// TestShowCrossRigBeadResolution verifies that gt show / gt bead show correctly
+// resolves cross-rig beads by routing to the correct Dolt database via prefix.
+// This is the fix for https://github.com/steveyegge/gastown/issues/2126
+func TestShowCrossRigBeadResolution(t *testing.T) {
+	if _, err := exec.LookPath("bd"); err != nil {
+		t.Skip("bd not installed, skipping integration test")
+	}
+	requireDoltServer(t)
+
+	n := routingTestCounter.Add(1)
+	hqP := fmt.Sprintf("shq%d", n)
+	gtP := fmt.Sprintf("sgt%d", n)
+	trP := fmt.Sprintf("str%d", n)
+
+	townRoot := setupRoutingTestTownWithPrefixes(t, hqP, gtP, trP)
+
+	// Initialize all three rig databases
+	initBeadsDBWithPrefix(t, townRoot, hqP)
+	gastownRigPath := filepath.Join(townRoot, "gastown", "mayor", "rig")
+	testrigRigPath := filepath.Join(townRoot, "testrig", "mayor", "rig")
+	initBeadsDBWithPrefix(t, gastownRigPath, gtP)
+	initBeadsDBWithPrefix(t, testrigRigPath, trP)
+
+	// Create test issues in each rig
+	townIssue := createTestIssue(t, townRoot, "Town show routing test")
+	gastownIssue := createTestIssue(t, gastownRigPath, "Gastown show routing test")
+	testrigIssue := createTestIssue(t, testrigRigPath, "Testrig show routing test")
+
+	tests := []struct {
+		name    string
+		beadID  string
+		title   string
+		runFrom string // Directory to run bd show from (simulates wrong rig)
+	}{
+		{
+			name:    "gastown bead from town root",
+			beadID:  gastownIssue.ID,
+			title:   gastownIssue.Title,
+			runFrom: townRoot, // Town root != gastown rig
+		},
+		{
+			name:    "testrig bead from gastown rig",
+			beadID:  testrigIssue.ID,
+			title:   testrigIssue.Title,
+			runFrom: gastownRigPath, // Gastown rig != testrig
+		},
+		{
+			name:    "town bead from testrig",
+			beadID:  townIssue.ID,
+			title:   townIssue.Title,
+			runFrom: testrigRigPath, // Testrig != town root
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Verify resolveBeadDirForShow returns the correct path.
+			// We need to chdir temporarily since FindFromCwd uses os.Getwd.
+			origDir, err := os.Getwd()
+			if err != nil {
+				t.Fatalf("Getwd: %v", err)
+			}
+			defer os.Chdir(origDir)
+
+			if err := os.Chdir(tc.runFrom); err != nil {
+				t.Fatalf("Chdir to %s: %v", tc.runFrom, err)
+			}
+
+			resolved := resolveBeadDirForShow(tc.beadID)
+			if resolved == "" {
+				t.Fatalf("resolveBeadDirForShow(%q) returned empty", tc.beadID)
+			}
+
+			// Now verify bd show actually works from the resolved directory
+			cmd := exec.Command("bd", "show", tc.beadID, "--json")
+			cmd.Dir = resolved
+			output, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("bd show %s from resolved dir %s failed: %v", tc.beadID, resolved, err)
+			}
+
+			var issues []beads.Issue
+			if err := json.Unmarshal(output, &issues); err != nil {
+				t.Fatalf("parse bd show output: %v", err)
+			}
+			if len(issues) == 0 {
+				t.Fatalf("bd show %s returned no issues", tc.beadID)
+			}
+			if issues[0].Title != tc.title {
+				t.Errorf("bd show %s title = %q, want %q", tc.beadID, issues[0].Title, tc.title)
+			}
+		})
+	}
+}
+
 // TestBeadsGetPrefixForRig verifies prefix lookup by rig name.
 func TestBeadsGetPrefixForRig(t *testing.T) {
 	tmpDir := t.TempDir()

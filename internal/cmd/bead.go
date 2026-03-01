@@ -115,8 +115,11 @@ func runBeadMove(cmd *cobra.Command, args []string) error {
 		targetPrefix = targetPrefix + "-"
 	}
 
-	// Get source bead details
+	// Get source bead details (route to correct rig via prefix)
 	showCmd := exec.Command("bd", "show", sourceID, "--json")
+	if dir := resolveBeadDirForShow(sourceID); dir != "" {
+		showCmd.Dir = dir
+	}
 	output, err := showCmd.Output()
 	if err != nil {
 		return fmt.Errorf("getting bead %s: %w", sourceID, err)
@@ -176,8 +179,11 @@ func runBeadMove(cmd *cobra.Command, args []string) error {
 		createArgs = append(createArgs, "--label", label)
 	}
 
-	// Create the new bead
+	// Create the new bead (route to target rig via prefix)
 	createCmd := exec.Command("bd", createArgs...)
+	if dir := resolveBeadDirForShow(targetPrefix + "x"); dir != "" {
+		createCmd.Dir = dir
+	}
 	createCmd.Stderr = os.Stderr
 	newIDBytes, err := createCmd.Output()
 	if err != nil {
@@ -187,9 +193,12 @@ func runBeadMove(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("%s Created %s\n", style.Bold.Render("✓"), newID)
 
-	// Close the source bead with reference
+	// Close the source bead with reference (route to source rig)
 	closeReason := fmt.Sprintf("Moved to %s", newID)
 	closeCmd := exec.Command("bd", "close", sourceID, "--reason", closeReason)
+	if dir := resolveBeadDirForShow(sourceID); dir != "" {
+		closeCmd.Dir = dir
+	}
 	closeCmd.Stderr = os.Stderr
 	if err := closeCmd.Run(); err != nil {
 		// Clean up the new bead since we couldn't close the source
