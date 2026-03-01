@@ -175,8 +175,8 @@ type Config struct {
 	// connection storms during mass polecat slings.
 	MaxConnections int
 
-	// LogLevel is the Dolt server log level (trace, debug, info, warn, error, fatal).
-	// Default is "warn" to suppress connection open/close noise. Override with
+	// LogLevel is the Dolt server log level (trace, debug, info, warning, error, fatal).
+	// Default is "warning" to suppress connection open/close noise. Override with
 	// GT_DOLT_LOGLEVEL=info (or debug) for diagnostics.
 	LogLevel string
 }
@@ -187,7 +187,7 @@ type Config struct {
 //   - GT_DOLT_PORT → Port
 //   - GT_DOLT_USER → User
 //   - GT_DOLT_PASSWORD → Password
-//   - GT_DOLT_LOGLEVEL → LogLevel (trace, debug, info, warn, error, fatal)
+//   - GT_DOLT_LOGLEVEL → LogLevel (trace, debug, info, warning, error, fatal)
 func DefaultConfig(townRoot string) *Config {
 	daemonDir := filepath.Join(townRoot, "daemon")
 	config := &Config{
@@ -198,7 +198,7 @@ func DefaultConfig(townRoot string) *Config {
 		LogFile:        filepath.Join(daemonDir, "dolt.log"),
 		PidFile:        filepath.Join(daemonDir, "dolt.pid"),
 		MaxConnections: DefaultMaxConnections,
-		LogLevel:       "warn",
+		LogLevel:       "warning",
 	}
 
 	if h := os.Getenv("GT_DOLT_HOST"); h != "" {
@@ -219,9 +219,9 @@ func DefaultConfig(townRoot string) *Config {
 		config.LogLevel = ll
 	}
 
-	// Default to warn logging. Use GT_DOLT_LOGLEVEL=info or =debug for diagnostics.
+	// Default to warning logging. Use GT_DOLT_LOGLEVEL=info or =debug for diagnostics.
 	if config.LogLevel == "" {
-		config.LogLevel = "warn"
+		config.LogLevel = "warning"
 	}
 
 	return config
