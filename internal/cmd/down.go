@@ -291,9 +291,9 @@ func runDown(cmd *cobra.Command, args []string) error {
 	}
 
 	// Phase 6: Nuke tmux server (--nuke only)
-	// With per-town tmux sockets, this only kills this town's tmux server,
-	// not other towns or the default socket. However, users may have opened
-	// custom windows/panes in this server, so we still require confirmation.
+	// All towns share the "default" tmux socket, so this kills the shared
+	// tmux server — affecting all towns, not just this one. Users may also
+	// have custom windows/panes on this server, so we require confirmation.
 	if downNuke {
 		socket := tmux.GetDefaultSocket()
 		socketLabel := "default"
