@@ -115,11 +115,12 @@ func SpawnPolecatForSling(rigName string, opts SlingSpawnOptions) (*SpawnedPolec
 	// to prevent witness→deacon→sling feedback loops.
 	if opts.HookBead != "" && !opts.Force {
 		if witness.ShouldBlockRespawn(townRoot, opts.HookBead) {
+			maxRespawns := config.LoadOperationalConfig(townRoot).GetWitnessConfig().MaxBeadRespawnsV()
 			return nil, fmt.Errorf("respawn limit reached for %s (%d attempts). "+
 				"This bead keeps failing — investigate before re-dispatching.\n"+
 				"Override: gt sling %s %s --force\n"+
 				"Reset:    gt sling respawn-reset %s",
-				opts.HookBead, witness.DefaultMaxBeadRespawns,
+				opts.HookBead, maxRespawns,
 				opts.HookBead, rigName, opts.HookBead)
 		}
 		witness.RecordBeadRespawn(townRoot, opts.HookBead)
