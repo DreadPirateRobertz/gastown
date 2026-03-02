@@ -224,6 +224,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	d.Register(doctor.NewLandWorktreeGitignoreCheck())
 	d.Register(doctor.NewHooksPathAllRigsCheck())
 
+	// Agent memory sharing across accounts
+	d.Register(doctor.NewMemorySymlinksCheck())
+
 	// Sparse checkout migration (runs across all rigs, not just --rig mode)
 	d.Register(doctor.NewSparseCheckoutCheck())
 

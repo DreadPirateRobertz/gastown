@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -45,7 +46,8 @@ Commands:
   gt quota status            Show account quota status
   gt quota scan              Detect rate-limited sessions
   gt quota rotate            Swap blocked sessions to available accounts
-  gt quota clear             Mark account(s) as available again`,
+  gt quota clear             Mark account(s) as available again
+  gt quota unify-memory      Unify agent memory dirs across accounts`,
 }
 
 var quotaStatusCmd = &cobra.Command{
@@ -616,6 +618,89 @@ func runQuotaClear(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// Unify-memory command flags
+var (
+	unifyMemoryDryRun bool
+)
+
+var quotaUnifyMemoryCmd = &cobra.Command{
+	Use:   "unify-memory",
+	Short: "Unify agent memory dirs across accounts via shared symlinks",
+	Long: `Replace per-account memory directories with symlinks to a shared location.
+
+Claude Code stores auto-memory at ~/.claude-accounts/<account>/projects/<path>/memory/.
+When agents run under different accounts (quota rotation or manual switch), each
+account gets its own isolated memory directory. This command unifies them so all
+agents in a rig share the same memory regardless of which account they're on.
+
+The shared canonical location is ~/.claude/shared-memory/<project-path>/.
+
+Process:
+  1. Scans all ~/.claude-accounts/*/projects/*/memory/ directories
+  2. Groups by project path
+  3. Merges content (largest MEMORY.md wins; other files copied if absent)
+  4. Replaces each account's memory/ dir with a symlink to the shared location
+
+Examples:
+  gt quota unify-memory              # Unify all project memories
+  gt quota unify-memory --dry-run    # Show what would be unified`,
+	RunE: runQuotaUnifyMemory,
+}
+
+func runQuotaUnifyMemory(cmd *cobra.Command, args []string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("getting home dir: %w", err)
+	}
+
+	accountsDir := filepath.Join(home, ".claude-accounts")
+	sharedBase := filepath.Join(home, ".claude", "shared-memory")
+
+	if _, err := os.Stat(accountsDir); os.IsNotExist(err) {
+		fmt.Printf(" %s No accounts directory found at %s\n", style.SuccessPrefix, accountsDir)
+		return nil
+	}
+
+	results, err := quota.UnifyMemory(accountsDir, sharedBase, unifyMemoryDryRun)
+	if err != nil {
+		return fmt.Errorf("unifying memory: %w", err)
+	}
+
+	if len(results) == 0 {
+		fmt.Printf(" %s No project memory directories found\n", style.SuccessPrefix)
+		return nil
+	}
+
+	prefix := ""
+	if unifyMemoryDryRun {
+		prefix = "(dry-run) "
+	}
+
+	for _, r := range results {
+		if len(r.SymlinksCreated) == 0 && len(r.AlreadyLinked) > 0 {
+			fmt.Printf(" %s %s%s: already unified (%d accounts)\n",
+				style.SuccessPrefix, prefix, r.ProjectPath, len(r.AlreadyLinked))
+			continue
+		}
+		if len(r.SymlinksCreated) > 0 {
+			fmt.Printf(" %s %s%s: %sunified %d account(s) → %s\n",
+				style.SuccessPrefix, prefix, r.ProjectPath,
+				func() string {
+					if len(r.AccountsMerged) > 0 {
+						return fmt.Sprintf("merged from [%s], ", strings.Join(r.AccountsMerged, ", "))
+					}
+					return ""
+				}(),
+				len(r.SymlinksCreated), r.SharedDir)
+		}
+		for _, w := range r.Warnings {
+			fmt.Printf(" %s %s: %s\n", style.WarningPrefix, r.ProjectPath, w)
+		}
+	}
+
+	return nil
+}
+
 // accountHandles returns sorted account handle names for error messages.
 func accountHandles(acctCfg *config.AccountsConfig) []string {
 	handles := make([]string, 0, len(acctCfg.Accounts))
@@ -759,11 +844,19 @@ func executeKeychainRotation(
 		style.PrintWarning("could not update LastUsed for %s: %v", newAccount, err)
 	}
 
+	// Best-effort memory unification: ensure the rotated session's account
+	// project dirs use shared symlinks so memories persist across rotations.
+	if home, err := os.UserHomeDir(); err == nil {
+		sharedBase := filepath.Join(home, ".claude", "shared-memory")
+		accountsBase := filepath.Join(home, ".claude-accounts")
+		if err := quota.UnifyProjectMemoryForConfigDir(accountsBase, sharedBase, currentConfigDir); err != nil {
+			style.PrintWarning("memory unification for %s: %v", session, err)
+		}
+	}
+
 	result.Rotated = true
 	return result
 }
-
-
 
 func init() {
 	quotaStatusCmd.Flags().BoolVar(&quotaJSON, "json", false, "Output as JSON")
@@ -776,10 +869,13 @@ func init() {
 	quotaRotateCmd.Flags().StringVar(&rotateFrom, "from", "", "Preemptively rotate sessions using this account")
 	quotaRotateCmd.Flags().BoolVar(&rotateIdle, "idle", false, "Only rotate sessions at the idle prompt (skip busy agents)")
 
+	quotaUnifyMemoryCmd.Flags().BoolVar(&unifyMemoryDryRun, "dry-run", false, "Show what would be unified without making changes")
+
 	quotaCmd.AddCommand(quotaStatusCmd)
 	quotaCmd.AddCommand(quotaScanCmd)
 	quotaCmd.AddCommand(quotaRotateCmd)
 	quotaCmd.AddCommand(quotaClearCmd)
+	quotaCmd.AddCommand(quotaUnifyMemoryCmd)
 
 	rootCmd.AddCommand(quotaCmd)
 }
