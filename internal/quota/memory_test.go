@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestUnifyMemory_BasicMergeAndSymlink(t *testing.T) {
@@ -308,22 +309,34 @@ func TestUnifyMemory_SharedDirPreexistsWithContent(t *testing.T) {
 
 	project := "-Users-test-gt-project"
 
-	// Pre-create shared dir with larger MEMORY.md.
+	// Pre-create shared dir with a newer MEMORY.md (canonical version).
 	sharedDir := filepath.Join(sharedBase, project)
 	if err := os.MkdirAll(sharedDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 	largeContent := "# Shared memory\nThis is the canonical larger version with lots of content."
-	if err := os.WriteFile(filepath.Join(sharedDir, "MEMORY.md"), []byte(largeContent), 0644); err != nil {
+	sharedMemPath := filepath.Join(sharedDir, "MEMORY.md")
+	if err := os.WriteFile(sharedMemPath, []byte(largeContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Give shared file a future ModTime so it's clearly "newer".
+	futureTime := time.Now().Add(1 * time.Hour)
+	if err := os.Chtimes(sharedMemPath, futureTime, futureTime); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create an account with a smaller MEMORY.md.
+	// Create an account with a smaller, older MEMORY.md.
 	memDir := filepath.Join(accountsDir, "dev1", "projects", project, "memory")
 	if err := os.MkdirAll(memDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("small"), 0644); err != nil {
+	acctMemPath := filepath.Join(memDir, "MEMORY.md")
+	if err := os.WriteFile(acctMemPath, []byte("small"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Give account file an older ModTime.
+	pastTime := time.Now().Add(-1 * time.Hour)
+	if err := os.Chtimes(acctMemPath, pastTime, pastTime); err != nil {
 		t.Fatal(err)
 	}
 
@@ -336,7 +349,7 @@ func TestUnifyMemory_SharedDirPreexistsWithContent(t *testing.T) {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
 
-	// Verify shared MEMORY.md was NOT overwritten (it was larger).
+	// Verify shared MEMORY.md was NOT overwritten (it was newer).
 	data, err := os.ReadFile(filepath.Join(sharedDir, "MEMORY.md"))
 	if err != nil {
 		t.Fatalf("reading shared MEMORY.md: %v", err)
@@ -389,5 +402,74 @@ func TestUnifyMemory_SymlinkToWrongTarget(t *testing.T) {
 	}
 	if target != sharedDir {
 		t.Errorf("symlink target = %s, want %s", target, sharedDir)
+	}
+}
+
+func TestUnifyProjectMemoryForConfigDir_FallbackPathIsNoOp(t *testing.T) {
+	tmp := t.TempDir()
+	accountsDir := filepath.Join(tmp, "claude-accounts")
+	sharedBase := filepath.Join(tmp, "shared-memory")
+
+	// Set up an account with a project.
+	project := "-Users-test-gt-project"
+	memDir := filepath.Join(accountsDir, "dev1", "projects", project, "memory")
+	if err := os.MkdirAll(memDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pass ~/.claude (not under accountsDir) — should be a no-op.
+	claudeDir := filepath.Join(tmp, ".claude")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	err := UnifyProjectMemoryForConfigDir(accountsDir, sharedBase, claudeDir)
+	if err != nil {
+		t.Fatalf("expected no error for fallback path, got: %v", err)
+	}
+
+	// Verify the memory dir was NOT symlinked (no-op).
+	info, err := os.Lstat(memDir)
+	if err != nil {
+		t.Fatalf("lstat: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Error("fallback path should not trigger unification")
+	}
+}
+
+func TestUnifyMemory_AtomicReplaceSafety(t *testing.T) {
+	tmp := t.TempDir()
+	accountsDir := filepath.Join(tmp, "claude-accounts")
+	sharedBase := filepath.Join(tmp, "shared-memory")
+
+	project := "-Users-test-gt-project"
+	memDir := filepath.Join(accountsDir, "dev1", "projects", project, "memory")
+	if err := os.MkdirAll(memDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run unify — should succeed and leave no .bak remnants.
+	results, err := UnifyMemory(accountsDir, sharedBase, false)
+	if err != nil {
+		t.Fatalf("UnifyMemory: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if len(results[0].Warnings) > 0 {
+		t.Errorf("unexpected warnings: %v", results[0].Warnings)
+	}
+
+	// Verify no .bak directories left behind.
+	bakDir := memDir + ".bak"
+	if _, err := os.Stat(bakDir); !os.IsNotExist(err) {
+		t.Errorf("backup directory should be cleaned up, but still exists: %s", bakDir)
 	}
 }

@@ -846,11 +846,16 @@ func executeKeychainRotation(
 
 	// Best-effort memory unification: ensure the rotated session's account
 	// project dirs use shared symlinks so memories persist across rotations.
+	// Only attempt if currentConfigDir is under the accounts directory —
+	// the ~/.claude default represents a single-account scenario where
+	// account-based unification does not apply.
 	if home, err := os.UserHomeDir(); err == nil {
-		sharedBase := filepath.Join(home, ".claude", "shared-memory")
 		accountsBase := filepath.Join(home, ".claude-accounts")
-		if err := quota.UnifyProjectMemoryForConfigDir(accountsBase, sharedBase, currentConfigDir); err != nil {
-			style.PrintWarning("memory unification for %s: %v", session, err)
+		if strings.HasPrefix(currentConfigDir, accountsBase+string(os.PathSeparator)) {
+			sharedBase := filepath.Join(home, ".claude", "shared-memory")
+			if err := quota.UnifyProjectMemoryForConfigDir(accountsBase, sharedBase, currentConfigDir); err != nil {
+				style.PrintWarning("memory unification for %s: %v", session, err)
+			}
 		}
 	}
 
