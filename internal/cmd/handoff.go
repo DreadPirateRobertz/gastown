@@ -1322,8 +1322,9 @@ func looksLikeBeadID(s string) bool {
 
 // hookBeadForHandoff attaches a bead to the current agent's hook.
 func hookBeadForHandoff(beadID string) error {
-	// Verify the bead exists first
+	// Verify the bead exists first — route to the correct rig database (GH#2126)
 	verifyCmd := exec.Command("bd", "show", beadID, "--json")
+	verifyCmd.Dir = resolveBeadDir(beadID)
 	if err := verifyCmd.Run(); err != nil {
 		return fmt.Errorf("bead '%s' not found", beadID)
 	}

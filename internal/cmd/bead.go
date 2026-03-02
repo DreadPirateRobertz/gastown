@@ -115,8 +115,9 @@ func runBeadMove(cmd *cobra.Command, args []string) error {
 		targetPrefix = targetPrefix + "-"
 	}
 
-	// Get source bead details
+	// Get source bead details — route to the correct rig database (GH#2126)
 	showCmd := exec.Command("bd", "show", sourceID, "--json")
+	showCmd.Dir = resolveBeadDir(sourceID)
 	output, err := showCmd.Output()
 	if err != nil {
 		return fmt.Errorf("getting bead %s: %w", sourceID, err)

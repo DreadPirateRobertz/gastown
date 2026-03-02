@@ -49,6 +49,7 @@ func runCat(cmd *cobra.Command, args []string) error {
 	}
 
 	bdCmd := exec.Command("bd", bdArgs...)
+	bdCmd.Dir = resolveBeadDir(beadID) // Route to correct rig database (GH#2126)
 	bdCmd.Stdout = os.Stdout
 	bdCmd.Stderr = os.Stderr
 

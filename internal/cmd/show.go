@@ -47,10 +47,26 @@ func runShow(cmd *cobra.Command, args []string) error {
 }
 
 // execBdShow replaces the current process with 'bd show'.
+// Resolves the correct working directory from the bead ID's prefix
+// so that bd routes to the correct rig database (GH#2126).
 func execBdShow(args []string) error {
 	bdPath, err := exec.LookPath("bd")
 	if err != nil {
 		return fmt.Errorf("bd not found in PATH: %w", err)
+	}
+
+	// Resolve the rig directory from the bead ID prefix.
+	// Without this, bd runs in the caller's cwd and only finds town-level
+	// (hq-*) beads, failing for rig-prefixed beads like gt-*, bd-*, etc.
+	if len(args) > 0 {
+		beadDir := resolveBeadDir(args[0])
+		if beadDir != "" && beadDir != "." {
+			if err := os.Chdir(beadDir); err != nil {
+				// Non-fatal: fall through to exec from current directory.
+				// bd may still resolve via its own routing.
+				fmt.Fprintf(os.Stderr, "Warning: could not chdir to %s: %v\n", beadDir, err)
+			}
+		}
 	}
 
 	// Build args: bd show <all-args>
