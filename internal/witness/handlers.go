@@ -871,6 +871,9 @@ const (
 	ZombieIdleDirtySandbox ZombieClassification = "idle-dirty-sandbox"
 	// ZombieSessionDeadActive: session dead but agent state indicates active work.
 	ZombieSessionDeadActive ZombieClassification = "session-dead-active"
+	// ZombieStuckSpawn: polecat stuck in agent_state=spawning beyond SpawnGracePeriod.
+	// The spawn likely failed (gt sling crashed mid-setup). Restart to recover.
+	ZombieStuckSpawn ZombieClassification = "stuck-spawn"
 )
 
 // ImpliesActiveWork returns true if this classification indicates the polecat
@@ -880,7 +883,7 @@ const (
 func (c ZombieClassification) ImpliesActiveWork() bool {
 	switch c {
 	case ZombieStuckInDone, ZombieAgentDeadInSession, ZombieBeadClosedStillRunning,
-		ZombieDoneIntentDead, ZombieSessionDeadActive:
+		ZombieDoneIntentDead, ZombieSessionDeadActive, ZombieStuckSpawn:
 		return true
 	default:
 		return false
@@ -1138,6 +1141,44 @@ func detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, session
 		return ZombieResult{}, false
 	}
 
+	// Spawn grace period (GH#2036): A polecat in agent_state=spawning has its
+	// hook_bead set before the tmux session is created. The dead session is
+	// EXPECTED during this window — gt sling is still setting up the worktree.
+	// Skip zombie detection entirely if the spawn is recent (< SpawnGracePeriod).
+	// If the spawn is stale (> SpawnGracePeriod), gt sling likely crashed —
+	// restart the polecat to recover.
+	if typedState == beads.AgentStateSpawning {
+		updatedAt := getAgentBeadUpdatedAt(workDir, agentBeadID)
+		if updatedAt.IsZero() {
+			// Can't parse timestamp — be safe, skip zombie detection during
+			// spawning. Matches daemon.go behavior for unparseable timestamps.
+			return ZombieResult{}, false
+		}
+		if time.Since(updatedAt) < SpawnGracePeriod {
+			return ZombieResult{}, false // Spawn in progress — not a zombie
+		}
+
+		// Spawn grace expired — gt sling likely crashed. Restart to recover.
+		// TOCTOU guard: verify session wasn't created since detection.
+		if sessionRecreated(t, sessionName, detectedAt) {
+			return ZombieResult{}, false
+		}
+
+		zombie := ZombieResult{
+			PolecatName:    polecatName,
+			AgentState:     agentState,
+			Classification: ZombieStuckSpawn,
+			HookBead:       hookBead,
+			WasActive:      true,
+			Action:         "restarted-stuck-spawn",
+		}
+		if err := RestartPolecatSession(workDir, rigName, polecatName); err != nil {
+			zombie.Error = err
+			zombie.Action = fmt.Sprintf("restart-stuck-spawn-failed: %v", err)
+		}
+		return zombie, true
+	}
+
 	// A polecat whose hook bead is already CLOSED completed its work
 	// successfully. The dead session is expected (gt done kills it).
 	// Don't flag as zombie or trigger re-dispatch. (gt-sy8)
@@ -1220,6 +1261,18 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 // and dead sessions (died during gt done). A single constant prevents threshold
 // drift between the two detection paths (gt-y230).
 const DoneIntentGracePeriod = 60 * time.Second
+
+// SpawnGracePeriod is how long to allow a polecat to remain in agent_state=spawning
+// before treating it as a stuck spawn. During this window, the witness skips zombie
+// detection entirely — the polecat's tmux session hasn't been created yet, so
+// "hook assigned, session dead" is expected, not a zombie indicator.
+//
+// Matches the daemon's 5-minute spawning guard (daemon.go) for consistency.
+// On large repos (80k+ commits, 4.8GB), worktree creation during gt sling can
+// take several minutes, making this window necessary.
+//
+// See: https://github.com/steveyegge/gastown/issues/2036
+const SpawnGracePeriod = 5 * time.Minute
 
 // StartupStallThreshold is the minimum session age before a session with no
 // recent tmux activity is considered stalled at startup. Sessions younger than
@@ -1572,6 +1625,28 @@ func getAgentBeadState(workDir, agentBeadID string) (agentState, hookBead string
 	}
 
 	return issues[0].AgentState, issues[0].HookBead
+}
+
+// getAgentBeadUpdatedAt reads the updated_at timestamp from an agent bead.
+// Returns zero time if the bead doesn't exist, can't be queried, or has no timestamp.
+func getAgentBeadUpdatedAt(workDir, agentBeadID string) time.Time {
+	output, err := bdExec(workDir, "show", agentBeadID, "--json")
+	if err != nil || output == "" {
+		return time.Time{}
+	}
+
+	var issues []struct {
+		UpdatedAt string `json:"updated_at"`
+	}
+	if err := json.Unmarshal([]byte(output), &issues); err != nil || len(issues) == 0 {
+		return time.Time{}
+	}
+
+	t, err := time.Parse(time.RFC3339, issues[0].UpdatedAt)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // getBeadStatus returns the status of a bead (e.g., "open", "closed", "hooked").

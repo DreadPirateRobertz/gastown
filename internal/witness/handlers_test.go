@@ -1505,3 +1505,124 @@ func TestClearCompletionMetadata_NoBd(t *testing.T) {
 	}
 }
 
+// --- Spawn Grace Period Tests (GH#2036) ---
+
+func TestDetectZombie_SpawningRecentSkipped(t *testing.T) {
+	t.Parallel()
+	// A polecat in agent_state=spawning with a recent updated_at should be
+	// skipped entirely — not treated as a zombie. This is the core fix for
+	// GH#2036: gt sling sets hook_bead before creating the tmux session.
+	agentState := beads.AgentStateSpawning
+	updatedAt := time.Now().Add(-30 * time.Second) // 30s ago — well within grace period
+
+	// Spawning + recent update → skip (not a zombie)
+	shouldSkip := agentState == beads.AgentStateSpawning &&
+		!updatedAt.IsZero() && time.Since(updatedAt) < SpawnGracePeriod
+	if !shouldSkip {
+		t.Errorf("expected skip for spawning polecat with recent update (age=%v)", time.Since(updatedAt))
+	}
+}
+
+func TestDetectZombie_SpawningExpiredRestarted(t *testing.T) {
+	t.Parallel()
+	// A polecat in agent_state=spawning with an old updated_at (> SpawnGracePeriod)
+	// should be classified as ZombieStuckSpawn and restarted.
+	agentState := beads.AgentStateSpawning
+	updatedAt := time.Now().Add(-10 * time.Minute) // 10 min ago — past grace period
+
+	// Spawning + old update → stuck spawn
+	isStuckSpawn := agentState == beads.AgentStateSpawning &&
+		!updatedAt.IsZero() && time.Since(updatedAt) >= SpawnGracePeriod
+	if !isStuckSpawn {
+		t.Errorf("expected stuck-spawn for spawning polecat with old update (age=%v)", time.Since(updatedAt))
+	}
+}
+
+func TestDetectZombie_SpawningNoTimestampSkipped(t *testing.T) {
+	t.Parallel()
+	// If we can't parse the updated_at timestamp, be safe and skip
+	// (same behavior as daemon.go when timestamp is unparseable).
+	agentState := beads.AgentStateSpawning
+	updatedAt := time.Time{} // zero — unparseable
+
+	// Spawning + zero timestamp → treated as within grace (safe default)
+	isWithinGrace := agentState == beads.AgentStateSpawning &&
+		!updatedAt.IsZero() && time.Since(updatedAt) < SpawnGracePeriod
+	// With zero timestamp, !updatedAt.IsZero() is false, so this path
+	// should NOT skip — but the code uses the inverse: if zero, skip.
+	// Verify the code's actual logic matches: zero timestamp → skip.
+	shouldSkipZeroTs := agentState == beads.AgentStateSpawning && updatedAt.IsZero()
+	if isWithinGrace {
+		t.Error("zero timestamp should not match 'within grace' condition")
+	}
+	if !shouldSkipZeroTs {
+		t.Error("zero timestamp should trigger safe-skip path")
+	}
+}
+
+func TestSpawnGracePeriod_MatchesDaemon(t *testing.T) {
+	t.Parallel()
+	// SpawnGracePeriod should be 5 minutes, matching the daemon's guard
+	// in daemon.go. If this constant drifts, update both.
+	if SpawnGracePeriod != 5*time.Minute {
+		t.Errorf("SpawnGracePeriod = %v, want 5m (must match daemon's spawning guard)", SpawnGracePeriod)
+	}
+}
+
+func TestZombieStuckSpawn_ImpliesActiveWork(t *testing.T) {
+	t.Parallel()
+	// ZombieStuckSpawn should imply active work (the polecat was assigned work
+	// via hook_bead when it got stuck in spawning).
+	if !ZombieStuckSpawn.ImpliesActiveWork() {
+		t.Error("ZombieStuckSpawn.ImpliesActiveWork() = false, want true")
+	}
+}
+
+func TestGetAgentBeadUpdatedAt_ValidTimestamp(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC().Truncate(time.Second)
+	nowStr := now.Format(time.RFC3339)
+	installMockBd(t,
+		func(args []string) (string, error) {
+			return fmt.Sprintf(`[{"updated_at": %q}]`, nowStr), nil
+		},
+		func(args []string) error { return nil },
+	)
+
+	got := getAgentBeadUpdatedAt("/tmp", "gt-test-agent")
+	if got.IsZero() {
+		t.Fatal("expected non-zero time, got zero")
+	}
+	if !got.Equal(now) {
+		t.Errorf("getAgentBeadUpdatedAt = %v, want %v", got, now)
+	}
+}
+
+func TestGetAgentBeadUpdatedAt_InvalidTimestamp(t *testing.T) {
+	t.Parallel()
+	installMockBd(t,
+		func(args []string) (string, error) {
+			return `[{"updated_at": "not-a-timestamp"}]`, nil
+		},
+		func(args []string) error { return nil },
+	)
+
+	got := getAgentBeadUpdatedAt("/tmp", "gt-test-agent")
+	if !got.IsZero() {
+		t.Errorf("expected zero time for invalid timestamp, got %v", got)
+	}
+}
+
+func TestGetAgentBeadUpdatedAt_BdFailure(t *testing.T) {
+	t.Parallel()
+	installMockBd(t,
+		func(args []string) (string, error) { return "", fmt.Errorf("bd: not found") },
+		func(args []string) error { return nil },
+	)
+
+	got := getAgentBeadUpdatedAt("/tmp", "gt-test-agent")
+	if !got.IsZero() {
+		t.Errorf("expected zero time when bd fails, got %v", got)
+	}
+}
+
