@@ -864,8 +864,8 @@ func (m *Manager) InitBeads(rigPath, prefix, rigName string) error {
 	}
 
 	// Run bd init if available (Dolt is the only backend since bd v0.51.0).
-	// --server tells bd to set dolt_mode=server in metadata.json so bd
-	// connects to the centralized Dolt sql-server instead of embedded mode.
+	// --server is a no-op since bd v0.57.0 (always server mode), but kept
+	// for backward compatibility with older bd versions.
 	initArgs := []string{"init"}
 	if prefix != "" {
 		initArgs = append(initArgs, "--prefix", prefix)
