@@ -1154,6 +1154,29 @@ func detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, session
 		return ZombieResult{}, false
 	}
 
+	// Spawning guard: skip polecats being actively started by gt sling (#2036).
+	// agent_state='spawning' means the polecat bead was created (with hook_bead
+	// set atomically) but the tmux session hasn't been launched yet. The dead
+	// session is expected during this window. Matches daemon's spawning guard
+	// (issue #1752).
+	if typedState == beads.AgentStateSpawning {
+		updatedAt := getAgentBeadUpdatedAt(workDir, agentBeadID)
+		if updatedAt != "" {
+			if ts, err := time.Parse(time.RFC3339, updatedAt); err == nil {
+				if time.Since(ts) < SpawnGracePeriod {
+					return ZombieResult{}, false // Recent spawn — not a zombie
+				}
+				// Spawning guard expired — proceed with zombie detection
+			} else {
+				// Can't parse timestamp — be safe, skip (same as daemon behavior)
+				return ZombieResult{}, false
+			}
+		} else {
+			// Can't read updated_at — be safe, skip
+			return ZombieResult{}, false
+		}
+	}
+
 	// A polecat whose hook bead is already CLOSED completed its work
 	// successfully. The dead session is expected (gt done kills it).
 	// Don't flag as zombie or trigger re-dispatch. (gt-sy8)
@@ -1278,6 +1301,12 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 // and dead sessions (died during gt done). A single constant prevents threshold
 // drift between the two detection paths (gt-y230).
 const DoneIntentGracePeriod = 60 * time.Second
+
+// SpawnGracePeriod is how long to wait before treating a polecat in
+// agent_state=spawning as a zombie. During this window, gt sling is creating
+// the worktree and tmux session — no session is expected to exist yet.
+// Matches the daemon's spawning guard (issue #1752, #2036).
+const SpawnGracePeriod = 5 * time.Minute
 
 // StartupStallThreshold is the minimum session age before a session with no
 // recent tmux activity is considered stalled at startup. Sessions younger than
@@ -1630,6 +1659,24 @@ func getAgentBeadState(workDir, agentBeadID string) (agentState, hookBead string
 	}
 
 	return issues[0].AgentState, issues[0].HookBead
+}
+
+// getAgentBeadUpdatedAt reads the updated_at timestamp from an agent bead.
+// Returns the RFC3339 timestamp string, or empty string on error.
+func getAgentBeadUpdatedAt(workDir, agentBeadID string) string {
+	output, err := bdExec(workDir, "show", agentBeadID, "--json")
+	if err != nil || output == "" {
+		return ""
+	}
+
+	var issues []struct {
+		UpdatedAt string `json:"updated_at"`
+	}
+	if err := json.Unmarshal([]byte(output), &issues); err != nil || len(issues) == 0 {
+		return ""
+	}
+
+	return issues[0].UpdatedAt
 }
 
 // getBeadStatus returns the status of a bead (e.g., "open", "closed", "hooked").

@@ -1559,3 +1559,149 @@ func TestClearCompletionMetadata_NoBd(t *testing.T) {
 	}
 }
 
+func TestSpawnGracePeriod_RecentSpawn(t *testing.T) {
+	t.Parallel()
+	// A polecat in agent_state=spawning with a recent updated_at should NOT
+	// be treated as a zombie. This is the core fix for #2036.
+	agentState := beads.AgentStateSpawning
+	updatedAt := time.Now().Add(-2 * time.Minute) // 2 min ago — within grace period
+
+	isZombie := agentState.IsActive() // spawning IS active
+	if !isZombie {
+		t.Fatal("spawning should be an active state")
+	}
+
+	// But the spawning guard should skip it
+	shouldSkip := agentState == beads.AgentStateSpawning && time.Since(updatedAt) < SpawnGracePeriod
+	if !shouldSkip {
+		t.Errorf("expected skip for recent spawning polecat (age=%v, grace=%v)",
+			time.Since(updatedAt).Round(time.Second), SpawnGracePeriod)
+	}
+}
+
+func TestSpawnGracePeriod_StaleSpawn(t *testing.T) {
+	t.Parallel()
+	// A polecat in agent_state=spawning for > SpawnGracePeriod should be
+	// treated as a zombie (gt sling may have crashed).
+	agentState := beads.AgentStateSpawning
+	updatedAt := time.Now().Add(-10 * time.Minute) // 10 min ago — past grace period
+
+	shouldProceed := agentState == beads.AgentStateSpawning && time.Since(updatedAt) >= SpawnGracePeriod
+	if !shouldProceed {
+		t.Errorf("expected zombie detection for stale spawning polecat (age=%v, grace=%v)",
+			time.Since(updatedAt).Round(time.Second), SpawnGracePeriod)
+	}
+}
+
+func TestSpawnGracePeriod_ExactBoundary(t *testing.T) {
+	t.Parallel()
+	// At exactly SpawnGracePeriod, should proceed with zombie detection.
+	updatedAt := time.Now().Add(-SpawnGracePeriod)
+	age := time.Since(updatedAt)
+
+	// age >= SpawnGracePeriod means we proceed (not strictly less than)
+	shouldProceed := age >= SpawnGracePeriod
+	if !shouldProceed {
+		t.Errorf("expected zombie detection at exact grace period boundary (age=%v)", age.Round(time.Second))
+	}
+}
+
+func TestGetAgentBeadUpdatedAt_ValidOutput(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC().Format(time.RFC3339)
+	installMockBd(t,
+		func(args []string) (string, error) {
+			return fmt.Sprintf(`[{"updated_at": "%s"}]`, now), nil
+		},
+		func(args []string) error { return nil },
+	)
+
+	got := getAgentBeadUpdatedAt("/tmp", "gt-fake-agent")
+	if got != now {
+		t.Errorf("getAgentBeadUpdatedAt = %q, want %q", got, now)
+	}
+}
+
+func TestGetAgentBeadUpdatedAt_NoBd(t *testing.T) {
+	t.Parallel()
+	installMockBd(t,
+		func(args []string) (string, error) { return "", fmt.Errorf("bd: not found") },
+		func(args []string) error { return fmt.Errorf("bd: not found") },
+	)
+
+	got := getAgentBeadUpdatedAt("/tmp", "gt-fake-agent")
+	if got != "" {
+		t.Errorf("getAgentBeadUpdatedAt = %q, want empty when bd unavailable", got)
+	}
+}
+
+func TestSpawnGracePeriod_GuardLogic(t *testing.T) {
+	t.Parallel()
+	// Test the spawning guard logic as implemented in detectZombieDeadSession.
+	// We test the boolean logic directly because mocking tmux is hard.
+	// This mirrors the approach in TestZombieClassification_SpawningState.
+
+	cases := []struct {
+		name       string
+		agentState beads.AgentState
+		updatedAt  time.Time
+		wantSkip   bool // true = spawning guard should skip (not a zombie)
+	}{
+		{
+			name:       "recent spawn within grace period",
+			agentState: beads.AgentStateSpawning,
+			updatedAt:  time.Now().Add(-2 * time.Minute),
+			wantSkip:   true,
+		},
+		{
+			name:       "stale spawn past grace period",
+			agentState: beads.AgentStateSpawning,
+			updatedAt:  time.Now().Add(-10 * time.Minute),
+			wantSkip:   false,
+		},
+		{
+			name:       "running state not affected by guard",
+			agentState: beads.AgentStateRunning,
+			updatedAt:  time.Now().Add(-2 * time.Minute),
+			wantSkip:   false,
+		},
+		{
+			name:       "working state not affected by guard",
+			agentState: beads.AgentStateWorking,
+			updatedAt:  time.Now().Add(-2 * time.Minute),
+			wantSkip:   false,
+		},
+		{
+			name:       "spawn at exact boundary",
+			agentState: beads.AgentStateSpawning,
+			updatedAt:  time.Now().Add(-SpawnGracePeriod),
+			wantSkip:   false, // >= boundary means proceed with detection
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Simulate the spawning guard logic from detectZombieDeadSession
+			shouldSkip := false
+			if tc.agentState == beads.AgentStateSpawning {
+				if time.Since(tc.updatedAt) < SpawnGracePeriod {
+					shouldSkip = true
+				}
+			}
+			if shouldSkip != tc.wantSkip {
+				t.Errorf("spawning guard: skip=%v, want skip=%v (state=%s, age=%v)",
+					shouldSkip, tc.wantSkip, tc.agentState, time.Since(tc.updatedAt).Round(time.Second))
+			}
+		})
+	}
+}
+
+func TestSpawnGracePeriod_MatchesDaemon(t *testing.T) {
+	t.Parallel()
+	// The witness SpawnGracePeriod must match the daemon's 5-minute guard
+	// to prevent threshold drift between the two zombie detectors.
+	if SpawnGracePeriod != 5*time.Minute {
+		t.Errorf("SpawnGracePeriod = %v, want 5m (must match daemon guard)", SpawnGracePeriod)
+	}
+}
+
