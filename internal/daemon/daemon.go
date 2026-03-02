@@ -1579,6 +1579,18 @@ func StopDaemon(townRoot string) error {
 		return fmt.Errorf("daemon is not running")
 	}
 
+	// When the lock is held but the PID file is missing or empty,
+	// IsRunning returns (true, 0, nil). Calling os.FindProcess(0)
+	// yields an uninitialized handle whose Signal() panics with
+	// "os: process not initialized". Clean up the stale lock instead.
+	if pid <= 0 {
+		lockPath := filepath.Join(townRoot, "daemon", "daemon.lock")
+		pidFile := filepath.Join(townRoot, "daemon", "daemon.pid")
+		_ = os.Remove(lockPath)
+		_ = os.Remove(pidFile)
+		return nil
+	}
+
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		return fmt.Errorf("finding process: %w", err)
