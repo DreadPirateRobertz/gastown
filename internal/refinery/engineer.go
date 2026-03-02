@@ -512,6 +512,8 @@ func (e *Engineer) doMerge(ctx context.Context, branch, target, sourceIssue stri
 				Error:    "merge conflict during actual merge",
 			}
 		}
+		// Non-conflict failure: still need to abort to clean up dirty merge state
+		_ = e.git.AbortMerge()
 		return ProcessResult{
 			Success: false,
 			Error:   fmt.Sprintf("merge failed: %v", err),
