@@ -498,6 +498,7 @@ func IsRigName(target string) (string, bool) {
 
 // verifyWorktreeExists checks that a git worktree was actually created at the given path.
 // Returns an error if the worktree is missing or invalid.
+// Validates the full gitdir reference chain: .git file → worktree entry → back-reference.
 func verifyWorktreeExists(clonePath string) error {
 	// Check if directory exists
 	info, err := os.Stat(clonePath)
@@ -521,9 +522,31 @@ func verifyWorktreeExists(clonePath string) error {
 		return fmt.Errorf("checking .git: %w", err)
 	}
 
-	// .git should be a file for worktrees (contains "gitdir: ..." pointer)
-	// or a directory for regular clones - either is valid
-	_ = gitInfo // Both file and directory are acceptable
+	// If .git is a directory (regular clone), it's valid
+	if gitInfo.IsDir() {
+		return nil
+	}
+
+	// .git is a file — validate the gitdir reference points to an existing worktree entry (GH #2056).
+	// A .git file with a broken gitdir reference (pointing to a pruned or nonexistent
+	// worktree entry) causes all git operations to fail with "fatal: not a git repository".
+	data, err := os.ReadFile(gitPath)
+	if err != nil {
+		return fmt.Errorf("reading .git file: %w", err)
+	}
+
+	content := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(content, "gitdir: ") {
+		return fmt.Errorf("worktree .git file has invalid format (expected 'gitdir: ...'): %s", clonePath)
+	}
+
+	gitdirTarget := strings.TrimPrefix(content, "gitdir: ")
+	if _, err := os.Stat(gitdirTarget); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("worktree .git references nonexistent entry %s (worktree was likely pruned): %s", gitdirTarget, clonePath)
+		}
+		return fmt.Errorf("checking gitdir target: %w", err)
+	}
 
 	return nil
 }

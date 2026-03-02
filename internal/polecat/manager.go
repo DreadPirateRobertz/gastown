@@ -1239,6 +1239,16 @@ func (m *Manager) RepairWorktreeWithOptions(name string, force bool, opts AddOpt
 		return nil, fmt.Errorf("moving repaired worktree to final path: %w", err)
 	}
 
+	// Fix worktree gitdir back-reference after rename (GH #2056).
+	// git worktree add records the worktree's path in .git/worktrees/<entry>/gitdir.
+	// After os.Rename, this back-reference still points to the old temp path.
+	// If git worktree prune runs before this is fixed, the entry gets deleted,
+	// leaving the .git file pointing to a nonexistent worktree entry.
+	if err := fixWorktreeBackRef(newClonePath); err != nil {
+		// Non-fatal but warn — the worktree works now but is fragile
+		style.PrintWarning("could not fix worktree back-reference after repair: %v", err)
+	}
+
 	// NOTE: No per-directory CLAUDE.md or AGENTS.md is created here.
 	// Only ~/gt/CLAUDE.md (town-root identity anchor) exists on disk.
 	// Full context is injected ephemerally via SessionStart hook (gt prime).
@@ -2105,4 +2115,39 @@ func assessStaleness(info *StalenessInfo, threshold int) (bool, string) {
 	// No session but has agent bead without special state = clean up
 	// (The session is the source of truth for liveness)
 	return true, "no active session"
+}
+
+// fixWorktreeBackRef fixes the gitdir back-reference in a git worktree entry
+// after the worktree directory has been moved/renamed.
+//
+// Git worktrees have a bidirectional reference:
+//
+//	worktree/.git            → gitdir: <repo>/.git/worktrees/<entry>/
+//	<repo>/.git/worktrees/<entry>/gitdir → <worktree>/.git
+//
+// After os.Rename of the worktree directory, the forward reference (.git → entry)
+// still works, but the back-reference (entry → .git) points to the old path.
+// This causes git worktree prune to delete the entry, breaking the worktree.
+func fixWorktreeBackRef(worktreePath string) error {
+	gitFilePath := filepath.Join(worktreePath, ".git")
+	data, err := os.ReadFile(gitFilePath)
+	if err != nil {
+		return fmt.Errorf("reading .git file: %w", err)
+	}
+
+	// Parse "gitdir: <path>" from the .git file
+	content := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(content, "gitdir: ") {
+		return fmt.Errorf(".git file does not contain gitdir reference: %q", content)
+	}
+	worktreeEntryDir := strings.TrimPrefix(content, "gitdir: ")
+
+	// Update the back-reference in the worktree entry
+	gitdirPath := filepath.Join(worktreeEntryDir, "gitdir")
+	newBackRef := gitFilePath + "\n"
+	if err := os.WriteFile(gitdirPath, []byte(newBackRef), 0644); err != nil {
+		return fmt.Errorf("updating worktree gitdir back-reference: %w", err)
+	}
+
+	return nil
 }
