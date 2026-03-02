@@ -31,6 +31,11 @@ const (
 	// PollInterval is the default polling interval for wait loops.
 	PollInterval = 100 * time.Millisecond
 
+	// ZombieKillGracePeriod is how long to wait after detecting a zombie
+	// session before killing it, to mitigate TOCTOU races where a slow-
+	// starting agent appears dead but is actually initializing.
+	ZombieKillGracePeriod = 500 * time.Millisecond
+
 	// GracefulShutdownTimeout is how long to wait after sending Ctrl-C before
 	// forcefully killing a session.
 	// Configurable via operational.session.graceful_shutdown_timeout.

@@ -121,7 +121,24 @@ func (m *Manager) Start(foreground bool, agentOverride string, envOverrides []st
 			// Healthy - Claude is running
 			return ErrAlreadyRunning
 		}
-		// Zombie - tmux alive but Claude dead. Kill and recreate.
+		// Zombie detected — tmux alive but agent dead.
+		// Mitigate TOCTOU gap: the agent may be slow to start, appearing
+		// dead during initialization. Record session creation time, wait
+		// briefly, then re-verify before killing to avoid destroying a
+		// session that just became healthy.
+		createdAt, _ := t.GetSessionCreatedUnix(sessionID)
+		time.Sleep(constants.ZombieKillGracePeriod)
+
+		// Re-check: abort kill if agent started or session was replaced
+		if t.IsAgentAlive(sessionID) {
+			return ErrAlreadyRunning
+		}
+		if createdNow, _ := t.GetSessionCreatedUnix(sessionID); createdAt > 0 && createdNow != createdAt {
+			// Session was replaced between checks — another process already
+			// handled the zombie. Treat as already running; caller can retry.
+			return ErrAlreadyRunning
+		}
+
 		if err := t.KillSession(sessionID); err != nil {
 			return fmt.Errorf("killing zombie session: %w", err)
 		}
