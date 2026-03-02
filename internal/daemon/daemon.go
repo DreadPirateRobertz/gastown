@@ -1558,9 +1558,7 @@ func isRunningFromPID(townRoot string) (bool, int, error) {
 
 	if !alive {
 		// Process not running, clean up stale PID file
-		if err := os.Remove(pidFile); err == nil {
-			return false, 0, fmt.Errorf("removed stale PID file (process %d not found)", pid)
-		}
+		_ = os.Remove(pidFile)
 		return false, 0, nil
 	}
 
