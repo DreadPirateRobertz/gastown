@@ -24,6 +24,7 @@ var (
 	awaitSignalBackoffBase string
 	awaitSignalBackoffMult int
 	awaitSignalBackoffMax  string
+	awaitSignalMinSleep    string
 	awaitSignalQuiet       bool
 	awaitSignalAgentBead   string
 )
@@ -69,6 +70,10 @@ EXAMPLES:
   # On timeout, the agent bead's idle:N label is auto-incremented
   # On signal, caller should reset: gt agent state gt-gastown-witness --set idle=0
 
+  # With minimum sleep to prevent rapid cycling from spurious events:
+  gt mol await-signal --agent-bead hq-deacon \
+    --backoff-base 60s --backoff-mult 2 --backoff-max 5m --min-sleep 30s
+
   # Quiet mode (no output, for scripting)
   gt mol await-signal --timeout 30s --quiet`,
 	RunE: runMoleculeAwaitSignal,
@@ -104,6 +109,8 @@ func init() {
 		"Maximum interval cap for backoff (e.g., 10m)")
 	moleculeAwaitSignalCmd.Flags().StringVar(&awaitSignalAgentBead, "agent-bead", "",
 		"Agent bead ID for tracking idle cycles (reads/writes idle:N label)")
+	moleculeAwaitSignalCmd.Flags().StringVar(&awaitSignalMinSleep, "min-sleep", "",
+		"Minimum time to wait before returning, even if signal received early (e.g., 30s)")
 	moleculeAwaitSignalCmd.Flags().BoolVar(&awaitSignalQuiet, "quiet", false,
 		"Suppress output (for scripting)")
 	moleculeAwaitSignalCmd.Flags().BoolVar(&moleculeJSON, "json", false,
@@ -122,6 +129,8 @@ func init() {
 		"Maximum interval cap for backoff (e.g., 10m)")
 	moleculeAwaitSignalShortcutCmd.Flags().StringVar(&awaitSignalAgentBead, "agent-bead", "",
 		"Agent bead ID for tracking idle cycles (reads/writes idle:N label)")
+	moleculeAwaitSignalShortcutCmd.Flags().StringVar(&awaitSignalMinSleep, "min-sleep", "",
+		"Minimum time to wait before returning, even if signal received early (e.g., 30s)")
 	moleculeAwaitSignalShortcutCmd.Flags().BoolVar(&awaitSignalQuiet, "quiet", false,
 		"Suppress output (for scripting)")
 	moleculeAwaitSignalShortcutCmd.Flags().BoolVar(&moleculeJSON, "json", false,
@@ -230,6 +239,25 @@ func runMoleculeAwaitSignal(cmd *cobra.Command, args []string) error {
 	}
 
 	result.Elapsed = time.Since(startTime)
+
+	// Enforce minimum sleep if configured. This prevents spurious events
+	// (e.g., other agents writing to events.jsonl) from causing rapid patrol
+	// cycling, which leads to Claude thinking the task is "done" and exiting.
+	if awaitSignalMinSleep != "" && result.Reason == "signal" {
+		minSleep, err := time.ParseDuration(awaitSignalMinSleep)
+		if err != nil {
+			return fmt.Errorf("invalid min-sleep: %w", err)
+		}
+		if result.Elapsed < minSleep {
+			remaining := minSleep - result.Elapsed
+			if !awaitSignalQuiet && !moleculeJSON {
+				fmt.Printf("%s Signal received early, enforcing min-sleep (%v remaining)...\n",
+					style.Dim.Render("⏳"), remaining.Round(time.Second))
+			}
+			time.Sleep(remaining)
+			result.Elapsed = time.Since(startTime)
+		}
+	}
 
 	// On timeout, increment idle cycles and clear backoff window
 	if result.Reason == "timeout" && awaitSignalAgentBead != "" {

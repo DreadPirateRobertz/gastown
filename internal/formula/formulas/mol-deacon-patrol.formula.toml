@@ -1043,13 +1043,14 @@ Use await-signal with exponential backoff to wait for activity:
 
 ```bash
 gt mol step await-signal --agent-bead hq-deacon \
-  --backoff-base 60s --backoff-mult 2 --backoff-max 5m
+  --backoff-base 60s --backoff-mult 2 --backoff-max 5m --min-sleep 30s
 ```
 
 This command:
-1. Subscribes to `bd activity --follow` (beads activity feed)
-2. Returns IMMEDIATELY when any beads activity occurs
-3. If no activity, times out with exponential backoff:
+1. Subscribes to the events feed (~/.events.jsonl)
+2. Returns when any Gas Town activity occurs (after min-sleep elapses)
+3. The --min-sleep 30s prevents spurious events from causing rapid cycling
+4. If no activity, times out with exponential backoff:
    - First timeout: 60s
    - Second timeout: 120s
    - Third timeout: 240s
