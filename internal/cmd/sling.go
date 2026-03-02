@@ -263,6 +263,8 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 		if err := runBranchScopePreflightFromCWD(cwd); err != nil {
 			return err
 		}
+	} else {
+		style.PrintWarning("branch scope preflight skipped: could not determine working directory: %v", cwdErr)
 	}
 	townBeadsDir := filepath.Join(townRoot, ".beads")
 

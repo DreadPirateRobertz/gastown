@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/steveyegge/gastown/internal/git"
+	"github.com/steveyegge/gastown/internal/style"
 )
 
 const branchScopeEnvVar = "GT_BRANCH_SCOPE_PATHS"
@@ -69,14 +70,14 @@ func outOfScopeFiles(changedFiles, allowedPrefixes []string) []string {
 	return out
 }
 
-func resolveDefaultBaseRef(g *git.Git) string {
+func resolveDefaultBaseRef(g *git.Git) (string, error) {
 	if exists, err := g.RefExists("origin/main"); err == nil && exists {
-		return "origin/main"
+		return "origin/main", nil
 	}
 	if exists, err := g.RefExists("origin/master"); err == nil && exists {
-		return "origin/master"
+		return "origin/master", nil
 	}
-	return "origin/main"
+	return "", fmt.Errorf("neither origin/main nor origin/master exists; set base ref explicitly")
 }
 
 func runBranchScopePreflight(g *git.Git, baseRef string) error {
@@ -85,12 +86,20 @@ func runBranchScopePreflight(g *git.Git, baseRef string) error {
 		return nil
 	}
 	if strings.TrimSpace(baseRef) == "" {
-		baseRef = resolveDefaultBaseRef(g)
+		var err error
+		baseRef, err = resolveDefaultBaseRef(g)
+		if err != nil {
+			return fmt.Errorf("branch scope preflight: %w", err)
+		}
 	}
 
 	changedFiles, err := g.FilesChangedSince(baseRef, "HEAD")
 	if err != nil {
 		return fmt.Errorf("branch scope preflight: computing changed files: %w", err)
+	}
+	if len(changedFiles) == 0 {
+		style.PrintWarning("branch scope preflight: zero changed files vs %s (wrong base ref or empty branch?)", baseRef)
+		return nil
 	}
 	outOfScope := outOfScopeFiles(changedFiles, allowedPrefixes)
 	if len(outOfScope) == 0 {
