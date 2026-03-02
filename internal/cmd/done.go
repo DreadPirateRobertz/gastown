@@ -441,6 +441,43 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 			goto notifyWitness
 		}
 
+		// Branch contamination preflight (GH#2220)
+		// Check if the branch touches files outside the expected scope.
+		// Uses three-dot diff (merge-base) to find all files changed on this
+		// branch since it diverged from origin/default. The check is advisory
+		// for crew workers (warning) but blocking for polecats (error).
+		changedFiles, contErr := g.ChangedFilesBetween(originDefault, "HEAD")
+		if contErr != nil {
+			style.PrintWarning("could not run branch contamination check: %v", contErr)
+		} else if len(changedFiles) > 0 {
+			// Check for contamination indicators:
+			// - Files from multiple top-level directories suggest scope creep
+			// - Known non-code files in a code PR
+			topDirs := map[string]int{}
+			for _, f := range changedFiles {
+				parts := strings.SplitN(f, "/", 2)
+				topDirs[parts[0]]++
+			}
+
+			// Heuristic: if files span 4+ top-level directories, flag as potentially contaminated
+			if len(topDirs) >= 4 {
+				var dirList []string
+				for d, count := range topDirs {
+					dirList = append(dirList, fmt.Sprintf("  %s/ (%d files)", d, count))
+				}
+				msg := fmt.Sprintf("branch touches %d top-level directories — possible contamination:\n%s\n"+
+					"Changed files: %d total across %s...HEAD",
+					len(topDirs), strings.Join(dirList, "\n"), len(changedFiles), originDefault)
+
+				if os.Getenv("GT_POLECAT") != "" {
+					return fmt.Errorf("branch contamination detected (GH#2220):\n%s\n"+
+						"Polecats must have focused branches. Clean up with interactive rebase\n"+
+						"or use --status DEFERRED to exit without completing", msg)
+				}
+				style.PrintWarning("branch contamination warning (GH#2220):\n%s", msg)
+			}
+		}
+
 		// Determine merge strategy from convoy (gt-myofa.3)
 		// Convoys can override the default MR-based workflow:
 		//   direct: push commits straight to target branch, bypass refinery

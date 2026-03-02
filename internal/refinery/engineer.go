@@ -436,7 +436,25 @@ func (e *Engineer) doMerge(ctx context.Context, branch, target, sourceIssue stri
 		}
 	}
 
-	// Step 3.5: Push submodule commits if the branch changes submodule pointers.
+	// Step 3.5a: Branch contamination preflight (GH#2220)
+	// Check if the branch touches an unusual number of top-level directories,
+	// which may indicate unrelated commits leaked into the branch scope.
+	changedFiles, contErr := e.git.ChangedFilesBetween(target, branch)
+	if contErr != nil {
+		_, _ = fmt.Fprintf(e.output, "[Engineer] Warning: contamination check failed: %v\n", contErr)
+	} else if len(changedFiles) > 0 {
+		topDirs := map[string]int{}
+		for _, f := range changedFiles {
+			parts := strings.SplitN(f, "/", 2)
+			topDirs[parts[0]]++
+		}
+		if len(topDirs) >= 4 {
+			_, _ = fmt.Fprintf(e.output, "[Engineer] Warning: branch %s touches %d top-level directories (%d files) — possible contamination\n",
+				branch, len(topDirs), len(changedFiles))
+		}
+	}
+
+	// Step 3.5b: Push submodule commits if the branch changes submodule pointers.
 	// The refinery owns all remote pushes — submodule commits must land before the
 	// parent pointer is merged, otherwise main gets dangling submodule references.
 	subChanges, err := e.git.SubmoduleChanges(target, branch)

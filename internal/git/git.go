@@ -1228,6 +1228,22 @@ func (g *Git) CommitsAhead(base, branch string) (int, error) {
 	return count, nil
 }
 
+// ChangedFilesBetween returns the list of files changed between two refs
+// using three-dot diff (merge-base comparison). This shows files changed
+// on the branch since it diverged from base — useful for detecting
+// branch contamination (unrelated files leaking into a feature branch).
+func (g *Git) ChangedFilesBetween(base, head string) ([]string, error) {
+	out, err := g.run("diff", "--name-only", base+"..."+head)
+	if err != nil {
+		return nil, err
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return nil, nil
+	}
+	return strings.Split(out, "\n"), nil
+}
+
 // CountCommitsBehind returns the number of commits that HEAD is behind the given ref.
 // For example, CountCommitsBehind("origin/main") returns how many commits
 // are on origin/main that are not on the current HEAD.

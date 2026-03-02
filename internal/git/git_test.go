@@ -1587,3 +1587,94 @@ func TestClearPushURL(t *testing.T) {
 		t.Errorf("ClearPushURL (idempotent) should not error, got: %v", err)
 	}
 }
+
+func TestChangedFilesBetween(t *testing.T) {
+	dir := initTestRepo(t)
+	g := NewGit(dir)
+
+	// Create a feature branch with some changes
+	cmd := exec.Command("git", "checkout", "-b", "feature")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("checkout -b feature: %v", err)
+	}
+
+	// Add files in different directories
+	for _, f := range []string{"src/main.go", "pkg/util.go"} {
+		fpath := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.WriteFile(fpath, []byte("package main\n"), 0644); err != nil {
+			t.Fatalf("write %s: %v", f, err)
+		}
+	}
+	cmd = exec.Command("git", "add", ".")
+	cmd.Dir = dir
+	_ = cmd.Run()
+	cmd = exec.Command("git", "commit", "-m", "feature work")
+	cmd.Dir = dir
+	_ = cmd.Run()
+
+	t.Run("clean branch returns only feature files", func(t *testing.T) {
+		files, err := g.ChangedFilesBetween("main", "feature")
+		if err != nil {
+			t.Fatalf("ChangedFilesBetween: %v", err)
+		}
+		if len(files) != 2 {
+			t.Fatalf("expected 2 changed files, got %d: %v", len(files), files)
+		}
+	})
+
+	t.Run("no changes returns nil", func(t *testing.T) {
+		files, err := g.ChangedFilesBetween("feature", "feature")
+		if err != nil {
+			t.Fatalf("ChangedFilesBetween: %v", err)
+		}
+		if files != nil {
+			t.Fatalf("expected nil for no changes, got %v", files)
+		}
+	})
+
+	t.Run("contaminated branch has many dirs", func(t *testing.T) {
+		// Add files across 4+ top-level directories to simulate contamination
+		cmd = exec.Command("git", "checkout", "-b", "contaminated", "main")
+		cmd.Dir = dir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("checkout -b contaminated: %v", err)
+		}
+		for _, f := range []string{"cmd/root.go", "internal/foo.go", "docs/readme.txt", "scripts/build.sh", "test/e2e.go"} {
+			fpath := filepath.Join(dir, f)
+			if err := os.MkdirAll(filepath.Dir(fpath), 0755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(fpath, []byte("content\n"), 0644); err != nil {
+				t.Fatalf("write %s: %v", f, err)
+			}
+		}
+		cmd = exec.Command("git", "add", ".")
+		cmd.Dir = dir
+		_ = cmd.Run()
+		cmd = exec.Command("git", "commit", "-m", "scattered changes")
+		cmd.Dir = dir
+		_ = cmd.Run()
+
+		files, err := g.ChangedFilesBetween("main", "contaminated")
+		if err != nil {
+			t.Fatalf("ChangedFilesBetween: %v", err)
+		}
+		if len(files) != 5 {
+			t.Fatalf("expected 5 changed files, got %d: %v", len(files), files)
+		}
+
+		// Verify contamination detection heuristic
+		topDirs := map[string]bool{}
+		for _, f := range files {
+			parts := strings.SplitN(f, "/", 2)
+			topDirs[parts[0]] = true
+		}
+		if len(topDirs) < 4 {
+			t.Fatalf("expected 4+ top-level dirs for contamination, got %d", len(topDirs))
+		}
+	})
+}
