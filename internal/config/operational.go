@@ -99,7 +99,7 @@ const (
 const (
 	DefaultWitnessStartupStallThreshold  = 90 * time.Second
 	DefaultWitnessStartupActivityGrace   = 60 * time.Second
-	DefaultWitnessMaxBeadRespawns        = 2
+	DefaultWitnessMaxBeadRespawns        = 3
 	DefaultWitnessDoneIntentStuckTimeout = 60 * time.Second
 	DefaultWitnessDoneIntentRecentGrace  = 30 * time.Second
 )

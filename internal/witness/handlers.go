@@ -1016,7 +1016,7 @@ func DetectZombiePolecats(workDir, rigName string, router *mail.Router) *DetectZ
 			continue // Either handled or not a zombie
 		}
 
-		if zombie, found := detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, sessionName, t, doneIntent, detectedAt); found {
+		if zombie, found := detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, sessionName, t, doneIntent, detectedAt, witCfg); found {
 			result.Zombies = append(result.Zombies, zombie)
 		}
 	}
@@ -1097,11 +1097,12 @@ func detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, session
 //
 // gt-dsgp: Uses restart-first policy. Instead of nuking polecats with dead sessions,
 // restarts them to preserve worktrees and branches.
-func detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, sessionName string, t *tmux.Tmux, doneIntent *DoneIntent, detectedAt time.Time) (ZombieResult, bool) {
+func detectZombieDeadSession(workDir, rigName, polecatName, agentBeadID, sessionName string, t *tmux.Tmux, doneIntent *DoneIntent, detectedAt time.Time, witCfg *config.WitnessThresholds) (ZombieResult, bool) {
 	// Done-intent: polecat was trying to exit.
 	if doneIntent != nil {
 		age := time.Since(doneIntent.Timestamp)
-		if age < 30*time.Second {
+		doneIntentGrace := witCfg.DoneIntentRecentGraceD()
+		if age < doneIntentGrace {
 			return ZombieResult{}, false // Recent — still working through gt done
 		}
 		diAgentState, diHookBead := getAgentBeadState(workDir, agentBeadID)
@@ -1224,15 +1225,6 @@ func handleZombieRestart(workDir, rigName, polecatName, hookBead, cleanupStatus 
 	}
 }
 
-// StartupStallThreshold is the minimum session age before a session with no
-// recent tmux activity is considered stalled at startup. Sessions younger than
-// this are still in normal startup and should not be flagged.
-const StartupStallThreshold = 90 * time.Second
-
-// StartupActivityGrace is the maximum time since last tmux activity before
-// a session old enough to be past startup is considered stalled. If the session
-// has had tmux activity within this window, it's making progress.
-const StartupActivityGrace = 60 * time.Second
 
 // StalledResult represents a single stalled polecat detection.
 type StalledResult struct {
@@ -1607,7 +1599,7 @@ func getBeadStatus(workDir, beadID string) string {
 // 2. Resets status to open
 // 3. Clears assignee
 // 4. Sends mail to deacon for re-dispatch (includes respawn count; SPAWN_STORM
-//    prefix and Urgent priority when count exceeds DefaultMaxBeadRespawns)
+//    prefix and Urgent priority when count exceeds max bead respawns config)
 // Returns true if the bead was recovered.
 func resetAbandonedBead(workDir, rigName, hookBead, polecatName string, router *mail.Router) bool {
 	if hookBead == "" {
@@ -1617,6 +1609,13 @@ func resetAbandonedBead(workDir, rigName, hookBead, polecatName string, router *
 	if status != "hooked" && status != "in_progress" {
 		return false
 	}
+
+	// Load max respawns threshold from config.
+	trRoot, trErr := workspace.Find(workDir)
+	if trErr != nil || trRoot == "" {
+		trRoot = workDir
+	}
+	maxRespawns := config.LoadOperationalConfig(trRoot).GetWitnessConfig().MaxBeadRespawnsV()
 
 	// Circuit breaker (clown show #22): if this bead has already been
 	// respawned too many times, escalate to mayor instead of re-dispatching.
@@ -1637,7 +1636,7 @@ Previous Status: %s
 
 Action required: investigate why this task keeps killing its polecat,
 then either close the bead or reset the respawn counter.`,
-					hookBead, DefaultMaxBeadRespawns, rigName, polecatName, status),
+					hookBead, maxRespawns, rigName, polecatName, status),
 			}
 			_ = router.Send(msg)
 		}
@@ -1646,13 +1645,6 @@ then either close the bead or reset the respawn counter.`,
 
 	// Track respawn count for audit and storm detection.
 	respawnCount := RecordBeadRespawn(workDir, hookBead)
-
-	// Load max respawns threshold from config.
-	trRoot, trErr := workspace.Find(workDir)
-	if trErr != nil || trRoot == "" {
-		trRoot = workDir
-	}
-	maxRespawns := config.LoadOperationalConfig(trRoot).GetWitnessConfig().MaxBeadRespawnsV()
 
 	// Reset bead status to open and clear assignee
 	if err := bdRun(workDir, "update", hookBead, "--status=open", "--assignee="); err != nil {
