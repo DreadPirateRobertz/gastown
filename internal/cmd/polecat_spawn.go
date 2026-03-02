@@ -229,16 +229,6 @@ func SpawnPolecatForSling(rigName string, opts SlingSpawnOptions) (*SpawnedPolec
 		}
 	}
 
-	// No idle polecat available — allocate a new one.
-	polecatName, err := polecatMgr.AllocateName()
-	if err != nil {
-		return nil, fmt.Errorf("allocating polecat name: %w", err)
-	}
-	fmt.Printf("Allocated polecat: %s\n", polecatName)
-
-	// Check if polecat already exists (shouldn't happen - indicates stale state needing repair)
-	existingPolecat, err := polecatMgr.Get(polecatName)
-
 	// Determine base branch for polecat worktree
 	baseBranch := opts.BaseBranch
 	if baseBranch == "" && opts.HookBead != "" {
@@ -270,43 +260,14 @@ func SpawnPolecatForSling(rigName string, opts SlingSpawnOptions) (*SpawnedPolec
 		BaseBranch: baseBranch,
 	}
 
-	if err == nil {
-		// Stale state: polecat exists despite fresh name allocation - repair it
-		// Check for uncommitted work first
-		if !opts.Force {
-			pGit := git.NewGit(existingPolecat.ClonePath)
-			workStatus, checkErr := pGit.CheckUncommittedWork()
-			if checkErr == nil && !workStatus.Clean() {
-				return nil, fmt.Errorf("polecat '%s' has uncommitted work: %s\nUse --force to proceed anyway",
-					polecatName, workStatus.String())
-			}
-		}
-
-		// Check for unmerged MRs - destroying a polecat with pending MR loses work (ne-rn24b)
-		if existingPolecat.Branch != "" {
-			bd := beads.New(r.Path)
-			mr, mrErr := bd.FindMRForBranch(existingPolecat.Branch)
-			if mrErr == nil && mr != nil {
-				return nil, fmt.Errorf("polecat '%s' has unmerged MR: %s\n"+
-					"Wait for MR to merge before respawning, or use:\n"+
-					"  gt polecat nuke --force %s/%s  # to abandon the MR",
-					polecatName, mr.ID, rigName, polecatName)
-			}
-		}
-
-		fmt.Printf("Repairing stale polecat %s with fresh worktree...\n", polecatName)
-		if _, err = polecatMgr.RepairWorktreeWithOptions(polecatName, opts.Force, addOpts); err != nil {
-			return nil, fmt.Errorf("repairing stale polecat: %w", err)
-		}
-	} else if err == polecat.ErrPolecatNotFound {
-		// Create new polecat
-		fmt.Printf("Creating polecat %s...\n", polecatName)
-		if _, err = polecatMgr.AddWithOptions(polecatName, addOpts); err != nil {
-			return nil, fmt.Errorf("creating polecat: %w", err)
-		}
-	} else {
-		return nil, fmt.Errorf("getting polecat: %w", err)
+	// No idle polecat available — allocate and create atomically (GH#2215).
+	// AllocateAndAdd holds the pool lock through directory creation, preventing
+	// concurrent processes from allocating the same name.
+	polecatName, _, err := polecatMgr.AllocateAndAdd(addOpts)
+	if err != nil {
+		return nil, fmt.Errorf("allocating and creating polecat: %w", err)
 	}
+	fmt.Printf("Created polecat: %s\n", polecatName)
 
 	// Get polecat object for path info
 	polecatObj, err := polecatMgr.Get(polecatName)
