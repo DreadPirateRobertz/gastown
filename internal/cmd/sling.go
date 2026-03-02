@@ -259,6 +259,13 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("finding town root: %w", err)
 	}
+	if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+		if err := runBranchScopePreflightFromCWD(cwd); err != nil {
+			return err
+		}
+	} else {
+		style.PrintWarning("branch scope preflight skipped: cannot determine working directory: %v", cwdErr)
+	}
 	townBeadsDir := filepath.Join(townRoot, ".beads")
 
 	// Normalize target arguments: trim trailing slashes from target to handle tab-completion
