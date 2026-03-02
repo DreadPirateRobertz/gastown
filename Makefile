@@ -34,15 +34,18 @@ endif
 
 check-up-to-date:
 ifndef SKIP_UPDATE_CHECK
-	@git fetch origin main --quiet 2>/dev/null || true
-	@LOCAL=$$(git rev-parse HEAD 2>/dev/null); \
-	REMOTE=$$(git rev-parse origin/main 2>/dev/null); \
-	if [ -n "$$REMOTE" ] && [ "$$LOCAL" != "$$REMOTE" ]; then \
-		echo "ERROR: Local branch is not up to date with origin/main"; \
-		echo "  Local:  $$(git rev-parse --short HEAD)"; \
-		echo "  Remote: $$(git rev-parse --short origin/main)"; \
-		echo "Run 'git pull' first, or use SKIP_UPDATE_CHECK=1 to override"; \
-		exit 1; \
+	@BRANCH=$$(git symbolic-ref --short HEAD 2>/dev/null); \
+	if [ "$$BRANCH" = "main" ]; then \
+		git fetch origin main --quiet 2>/dev/null || true; \
+		LOCAL=$$(git rev-parse HEAD); \
+		REMOTE=$$(git rev-parse origin/main 2>/dev/null); \
+		if [ -n "$$REMOTE" ] && [ "$$LOCAL" != "$$REMOTE" ]; then \
+			echo "ERROR: Local branch is not up to date with origin/main"; \
+			echo "  Local:  $$(git rev-parse --short HEAD)"; \
+			echo "  Remote: $$(git rev-parse --short origin/main)"; \
+			echo "Run 'git pull' first, or use SKIP_UPDATE_CHECK=1 to override"; \
+			exit 1; \
+		fi; \
 	fi
 endif
 
