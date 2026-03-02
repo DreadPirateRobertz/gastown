@@ -1625,7 +1625,16 @@ Action required: investigate why this task keeps killing its polecat,
 then either close the bead or reset the respawn counter.`,
 					hookBead, DefaultMaxBeadRespawns, rigName, polecatName, status),
 			}
-			_ = router.Send(msg)
+			if err := router.Send(msg); err != nil {
+				fmt.Fprintf(os.Stderr, "witness: failed to send SPAWN_BLOCKED mail for %s: %v, attempting nudge fallback\n", hookBead, err)
+				// Nudge mayor as fallback — nudges are more reliable than mail
+				t := tmux.NewTmux()
+				nudgeMsg := fmt.Sprintf("SPAWN_BLOCKED %s (respawn limit reached) from %s/%s — mail send failed, investigate spawn storm",
+					hookBead, rigName, polecatName)
+				if nudgeErr := t.NudgeSession(session.MayorSessionName(), nudgeMsg); nudgeErr != nil {
+					fmt.Fprintf(os.Stderr, "witness: nudge fallback to mayor also failed for %s: %v\n", hookBead, nudgeErr)
+				}
+			}
 		}
 		return false
 	}
@@ -1667,7 +1676,16 @@ The bead has been reset to open with no assignee.
 Please re-dispatch to an available polecat.`,
 				hookBead, rigName, polecatName, status, respawnCount, stormNote),
 		}
-		_ = router.Send(msg) // Best-effort
+		if err := router.Send(msg); err != nil {
+			fmt.Fprintf(os.Stderr, "witness: failed to send RECOVERED_BEAD mail for %s: %v, attempting nudge fallback\n", hookBead, err)
+			// Nudge deacon as fallback — nudges are more reliable than mail
+			t := tmux.NewTmux()
+			nudgeMsg := fmt.Sprintf("RECOVERED_BEAD %s from %s/%s (status=%s, respawns=%d) — mail send failed, please re-dispatch",
+				hookBead, rigName, polecatName, status, respawnCount)
+			if nudgeErr := t.NudgeSession(session.DeaconSessionName(), nudgeMsg); nudgeErr != nil {
+				fmt.Fprintf(os.Stderr, "witness: nudge fallback to deacon also failed for %s: %v\n", hookBead, nudgeErr)
+			}
+		}
 	}
 
 	return true
