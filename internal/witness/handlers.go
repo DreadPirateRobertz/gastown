@@ -1034,6 +1034,11 @@ func detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, session
 			WasActive:      true,
 			Action:         fmt.Sprintf("restarted-stuck-session (done-intent age=%v)", time.Since(doneIntent.Timestamp).Round(time.Second)),
 		}
+		// TOCTOU guard (gt-0pst): Re-check session liveness before restarting.
+		// The session could have exited normally between our initial check and here.
+		if alive, _ := t.HasSession(sessionName); !alive {
+			return ZombieResult{}, false
+		}
 		if err := RestartPolecatSession(workDir, rigName, polecatName); err != nil {
 			zombie.Error = err
 			zombie.Action = fmt.Sprintf("restart-stuck-session-failed: %v", err)
@@ -1052,6 +1057,11 @@ func detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, session
 			HookBead:       deadAgentHookBead,
 			WasActive:      true,
 			Action:         "restarted-agent-dead-session",
+		}
+		// TOCTOU guard (gt-0pst): Re-check session liveness before restarting.
+		// The session could have exited normally between our initial check and here.
+		if alive, _ := t.HasSession(sessionName); !alive {
+			return ZombieResult{}, false
 		}
 		if err := RestartPolecatSession(workDir, rigName, polecatName); err != nil {
 			zombie.Error = err
@@ -1072,6 +1082,11 @@ func detectZombieLiveSession(workDir, rigName, polecatName, agentBeadID, session
 			HookBead:       hookBead,
 			WasActive:      true,
 			Action:         "restarted-bead-closed-polecat",
+		}
+		// TOCTOU guard (gt-0pst): Re-check session liveness before restarting.
+		// The session could have exited normally between our initial check and here.
+		if alive, _ := t.HasSession(sessionName); !alive {
+			return ZombieResult{}, false
 		}
 		if err := RestartPolecatSession(workDir, rigName, polecatName); err != nil {
 			zombie.Error = err
