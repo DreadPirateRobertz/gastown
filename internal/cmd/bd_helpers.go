@@ -60,6 +60,15 @@ func (b *bdCmd) WithBeadsDir(dir string) *bdCmd {
 	return b
 }
 
+// StripBeadsDir removes any inherited BEADS_DIR from the environment.
+// This enables bd's native prefix-based routing via routes.jsonl.
+// Use this for cross-rig lookups where bd should resolve the correct database
+// from the bead's prefix rather than a hardcoded BEADS_DIR.
+func (b *bdCmd) StripBeadsDir() *bdCmd {
+	b.env = filterEnvKey(b.env, "BEADS_DIR")
+	return b
+}
+
 // Dir sets the working directory for the command.
 func (b *bdCmd) Dir(dir string) *bdCmd {
 	b.dir = dir

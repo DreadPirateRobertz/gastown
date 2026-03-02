@@ -465,6 +465,67 @@ func TestBdCmd_WithBeadsDir_Chaining(t *testing.T) {
 	}
 }
 
+func TestBdCmd_StripBeadsDir_RemovesInherited(t *testing.T) {
+	// StripBeadsDir should remove inherited BEADS_DIR from the environment
+	// so bd's native prefix-based routing via routes.jsonl works correctly.
+	// This is the fix for #2126: inherited BEADS_DIR overrides routing and
+	// causes "bead not found" for rig-level beads.
+	bdc := &bdCmd{
+		args:   []string{"show", "myproject-abc", "--json"},
+		env:    []string{"PATH=/usr/bin", "BEADS_DIR=/town/.beads", "HOME=/home/user"},
+		stderr: os.Stderr,
+	}
+	bdc.StripBeadsDir()
+	cmd := bdc.Build()
+
+	for _, e := range cmd.Env {
+		if strings.HasPrefix(e, "BEADS_DIR=") {
+			t.Errorf("BEADS_DIR should be stripped, found: %s", e)
+		}
+	}
+}
+
+func TestBdCmd_StripBeadsDir_NoopWithout(t *testing.T) {
+	// StripBeadsDir should be a no-op when BEADS_DIR is not set
+	bdc := &bdCmd{
+		args:   []string{"show", "myproject-abc"},
+		env:    []string{"PATH=/usr/bin", "HOME=/home/user"},
+		stderr: os.Stderr,
+	}
+	origLen := len(bdc.env)
+	bdc.StripBeadsDir()
+	cmd := bdc.Build()
+
+	if len(cmd.Env) != origLen {
+		t.Errorf("env length changed: got %d, want %d", len(cmd.Env), origLen)
+	}
+}
+
+func TestBdCmd_StripBeadsDir_Chaining(t *testing.T) {
+	// StripBeadsDir should return receiver for chaining
+	bdc := BdCmd("test")
+	if bdc.StripBeadsDir() != bdc {
+		t.Error("StripBeadsDir() should return receiver for chaining")
+	}
+}
+
+func TestBdCmd_StripBeadsDir_ThenWithBeadsDir(t *testing.T) {
+	// StripBeadsDir followed by WithBeadsDir should set the new value.
+	// This is the pattern for patrol_helpers: strip inherited, set rig-specific.
+	bdc := &bdCmd{
+		args:   []string{"mol", "wisp", "create"},
+		env:    []string{"PATH=/usr/bin", "BEADS_DIR=/town/.beads", "HOME=/home/user"},
+		stderr: os.Stderr,
+	}
+	bdc.StripBeadsDir().WithBeadsDir("/town/rig/.beads")
+	cmd := bdc.Build()
+	envMap := parseEnv(cmd.Env)
+
+	if envMap["BEADS_DIR"] != "/town/rig/.beads" {
+		t.Errorf("BEADS_DIR = %q, want %q", envMap["BEADS_DIR"], "/town/rig/.beads")
+	}
+}
+
 // filterEnv returns env with all entries matching the given key prefix removed.
 func filterEnv(env []string, key string) []string {
 	prefix := key + "="

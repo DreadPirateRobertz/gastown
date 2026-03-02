@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -47,15 +48,34 @@ func runShow(cmd *cobra.Command, args []string) error {
 }
 
 // execBdShow replaces the current process with 'bd show'.
+// Strips inherited BEADS_DIR and resolves the rig directory from the bead's
+// prefix so bd's native routing finds rig-level beads correctly.
 func execBdShow(args []string) error {
 	bdPath, err := exec.LookPath("bd")
 	if err != nil {
 		return fmt.Errorf("bd not found in PATH: %w", err)
 	}
 
+	// Strip inherited BEADS_DIR to enable bd's native prefix-based routing.
+	// Without this, an inherited BEADS_DIR (e.g., pointing to HQ) overrides
+	// routing and causes "bead not found" for rig-level beads. See #2126.
+	env := filterEnvKey(os.Environ(), "BEADS_DIR")
+
+	// Resolve the rig directory from the first non-flag argument (the bead ID).
+	// This ensures bd runs from the correct rig directory where it can discover
+	// the rig's .beads database via cwd-based lookup.
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-") {
+			if dir := resolveBeadDir(arg); dir != "" && dir != "." {
+				_ = os.Chdir(dir)
+			}
+			break
+		}
+	}
+
 	// Build args: bd show <all-args>
 	// argv[0] must be the program name for exec
 	fullArgs := append([]string{"bd", "show"}, args...)
 
-	return syscall.Exec(bdPath, fullArgs, os.Environ())
+	return syscall.Exec(bdPath, fullArgs, env)
 }

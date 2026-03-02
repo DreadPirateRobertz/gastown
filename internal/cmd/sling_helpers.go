@@ -200,13 +200,12 @@ func burnExistingMolecules(molecules []string, beadID, townRoot string) error {
 }
 
 // verifyBeadExists checks that the bead exists using bd show.
-// Uses bd's native prefix-based routing via routes.jsonl - do NOT set BEADS_DIR
-// as that overrides routing and breaks resolution of rig-level beads.
-//
-// Checks bead existence using bd show.
+// Uses bd's native prefix-based routing via routes.jsonl.
+// Strips inherited BEADS_DIR so it doesn't override routing for rig-level beads.
 // Resolves the rig directory from the bead's prefix for correct dolt access.
 func verifyBeadExists(beadID string) error {
 	out, err := BdCmd("show", beadID, "--json", "--allow-stale").
+		StripBeadsDir().
 		Dir(resolveBeadDir(beadID)).
 		Stderr(io.Discard).
 		Output()
@@ -220,9 +219,11 @@ func verifyBeadExists(beadID string) error {
 }
 
 // getBeadInfo returns status and assignee for a bead.
+// Strips inherited BEADS_DIR so bd's native prefix routing resolves rig-level beads.
 // Resolves the rig directory from the bead's prefix for correct dolt access.
 func getBeadInfo(beadID string) (*beadInfo, error) {
 	out, err := BdCmd("show", beadID, "--json", "--allow-stale").
+		StripBeadsDir().
 		Dir(resolveBeadDir(beadID)).
 		Stderr(io.Discard).
 		Output()
@@ -269,8 +270,9 @@ func storeFieldsInBead(beadID string, updates beadFieldUpdates) error {
 	if logPath == "" {
 		// Read the bead once
 		out, err := BdCmd("show", beadID, "--json", "--allow-stale").
+			StripBeadsDir().
 			Dir(resolveBeadDir(beadID)).
-				Stderr(io.Discard).
+			Stderr(io.Discard).
 			Output()
 		if err != nil {
 			return fmt.Errorf("fetching bead: %w", err)
@@ -335,6 +337,7 @@ func storeFieldsInBead(beadID string, updates beadFieldUpdates) error {
 	}
 
 	if err := BdCmd("update", beadID, "--description="+newDesc).
+		StripBeadsDir().
 		Dir(resolveBeadDir(beadID)).
 		Run(); err != nil {
 		return fmt.Errorf("updating bead description: %w", err)
@@ -1020,6 +1023,7 @@ func hookBeadWithRetry(beadID, targetAgent, hookDir string) error {
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		err := BdCmd("update", beadID, "--status=hooked", "--assignee="+targetAgent).
+			StripBeadsDir().
 			Dir(hookDir).
 			Run()
 		if err != nil {
