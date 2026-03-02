@@ -1,5 +1,5 @@
 // ABOUTME: Hidden command for shell hook to detect rigs and update cache.
-// ABOUTME: Called by shell integration to set GT_TOWN_ROOT and GT_RIG env vars.
+// ABOUTME: Called by shell integration to set GT_ROOT, GT_TOWN_ROOT, and GT_RIG env vars.
 
 package cmd
 

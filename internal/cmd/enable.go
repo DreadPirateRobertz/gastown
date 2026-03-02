@@ -18,7 +18,7 @@ var enableCmd = &cobra.Command{
 	Long: `Enable Gas Town for all agentic coding tools.
 
 When enabled:
-  - Shell hooks set GT_TOWN_ROOT and GT_RIG environment variables
+  - Shell hooks set GT_ROOT and GT_RIG environment variables
   - Claude Code SessionStart hooks run 'gt prime' for context
   - Git repos are auto-registered as rigs (configurable)
 
@@ -43,7 +43,7 @@ func runEnable(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Gas Town will now:")
 	fmt.Println("  • Inject context into Claude Code sessions")
-	fmt.Println("  • Set GT_TOWN_ROOT and GT_RIG environment variables")
+	fmt.Println("  • Set GT_ROOT and GT_RIG environment variables")
 	fmt.Println("  • Auto-register git repos as rigs (if configured)")
 	fmt.Println()
 	fmt.Printf("Use %s to disable, %s to check status\n",

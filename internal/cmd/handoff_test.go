@@ -285,26 +285,10 @@ func TestDetectTownRootFromCwd_EnvFallback(t *testing.T) {
 	os.Setenv("GT_TOWN_ROOT", "")
 	os.Setenv("GT_ROOT", "")
 
-	t.Run("uses GT_TOWN_ROOT when cwd detection fails", func(t *testing.T) {
-		// Set GT_TOWN_ROOT to our temp town
-		os.Setenv("GT_TOWN_ROOT", tmpTown)
-		os.Setenv("GT_ROOT", "")
-
-		// Save cwd, cd to a non-town directory, and restore after
-		origCwd, _ := os.Getwd()
-		os.Chdir(os.TempDir())
-		defer os.Chdir(origCwd)
-
-		result := detectTownRootFromCwd()
-		if result != tmpTown {
-			t.Errorf("detectTownRootFromCwd() = %q, want %q (should use GT_TOWN_ROOT fallback)", result, tmpTown)
-		}
-	})
-
-	t.Run("uses GT_ROOT when GT_TOWN_ROOT not set", func(t *testing.T) {
-		// Set only GT_ROOT
-		os.Setenv("GT_TOWN_ROOT", "")
+	t.Run("uses GT_ROOT when cwd detection fails", func(t *testing.T) {
+		// Set GT_ROOT to our temp town
 		os.Setenv("GT_ROOT", tmpTown)
+		os.Setenv("GT_TOWN_ROOT", "")
 
 		// Save cwd, cd to a non-town directory, and restore after
 		origCwd, _ := os.Getwd()
@@ -317,16 +301,32 @@ func TestDetectTownRootFromCwd_EnvFallback(t *testing.T) {
 		}
 	})
 
-	t.Run("prefers GT_TOWN_ROOT over GT_ROOT", func(t *testing.T) {
-		// Create another temp town for GT_ROOT
+	t.Run("uses GT_TOWN_ROOT when GT_ROOT not set", func(t *testing.T) {
+		// Set only GT_TOWN_ROOT (deprecated alias)
+		os.Setenv("GT_ROOT", "")
+		os.Setenv("GT_TOWN_ROOT", tmpTown)
+
+		// Save cwd, cd to a non-town directory, and restore after
+		origCwd, _ := os.Getwd()
+		os.Chdir(os.TempDir())
+		defer os.Chdir(origCwd)
+
+		result := detectTownRootFromCwd()
+		if result != tmpTown {
+			t.Errorf("detectTownRootFromCwd() = %q, want %q (should use GT_TOWN_ROOT fallback)", result, tmpTown)
+		}
+	})
+
+	t.Run("prefers GT_ROOT over GT_TOWN_ROOT", func(t *testing.T) {
+		// Create another temp town for GT_TOWN_ROOT
 		anotherTown := t.TempDir()
 		anotherMayor := filepath.Join(anotherTown, "mayor")
 		os.MkdirAll(anotherMayor, 0755)
 		os.WriteFile(filepath.Join(anotherMayor, "town.json"), []byte(`{"name": "other-town"}`), 0644)
 
-		// Set both env vars
-		os.Setenv("GT_TOWN_ROOT", tmpTown)
-		os.Setenv("GT_ROOT", anotherTown)
+		// Set both env vars — GT_ROOT takes priority
+		os.Setenv("GT_ROOT", tmpTown)
+		os.Setenv("GT_TOWN_ROOT", anotherTown)
 
 		// Save cwd, cd to a non-town directory, and restore after
 		origCwd, _ := os.Getwd()
@@ -335,14 +335,14 @@ func TestDetectTownRootFromCwd_EnvFallback(t *testing.T) {
 
 		result := detectTownRootFromCwd()
 		if result != tmpTown {
-			t.Errorf("detectTownRootFromCwd() = %q, want %q (should prefer GT_TOWN_ROOT)", result, tmpTown)
+			t.Errorf("detectTownRootFromCwd() = %q, want %q (should prefer GT_ROOT)", result, tmpTown)
 		}
 	})
 
-	t.Run("ignores invalid GT_TOWN_ROOT", func(t *testing.T) {
-		// Set GT_TOWN_ROOT to non-existent path, GT_ROOT to valid
-		os.Setenv("GT_TOWN_ROOT", "/nonexistent/path/to/town")
-		os.Setenv("GT_ROOT", tmpTown)
+	t.Run("ignores invalid GT_ROOT", func(t *testing.T) {
+		// Set GT_ROOT to non-existent path, GT_TOWN_ROOT to valid
+		os.Setenv("GT_ROOT", "/nonexistent/path/to/town")
+		os.Setenv("GT_TOWN_ROOT", tmpTown)
 
 		// Save cwd, cd to a non-town directory, and restore after
 		origCwd, _ := os.Getwd()
@@ -351,7 +351,7 @@ func TestDetectTownRootFromCwd_EnvFallback(t *testing.T) {
 
 		result := detectTownRootFromCwd()
 		if result != tmpTown {
-			t.Errorf("detectTownRootFromCwd() = %q, want %q (should skip invalid GT_TOWN_ROOT and use GT_ROOT)", result, tmpTown)
+			t.Errorf("detectTownRootFromCwd() = %q, want %q (should skip invalid GT_ROOT and use GT_TOWN_ROOT)", result, tmpTown)
 		}
 	})
 
@@ -361,8 +361,8 @@ func TestDetectTownRootFromCwd_EnvFallback(t *testing.T) {
 		mayorOnlyDir := filepath.Join(secondaryTown, workspace.SecondaryMarker)
 		os.MkdirAll(mayorOnlyDir, 0755)
 
-		os.Setenv("GT_TOWN_ROOT", secondaryTown)
-		os.Setenv("GT_ROOT", "")
+		os.Setenv("GT_ROOT", secondaryTown)
+		os.Setenv("GT_TOWN_ROOT", "")
 
 		// Save cwd, cd to a non-town directory, and restore after
 		origCwd, _ := os.Getwd()

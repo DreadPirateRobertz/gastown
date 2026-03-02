@@ -246,7 +246,7 @@ These are set in tmux session environment when agents are spawned.
 | Variable | Purpose |
 |----------|---------|
 | `GIT_AUTHOR_EMAIL` | Workspace owner email (from git config) |
-| `GT_TOWN_ROOT` | Override town root detection (manual use) |
+| `GT_TOWN_ROOT` | Deprecated alias for `GT_ROOT` (kept for backward compatibility) |
 | `CLAUDE_RUNTIME_CONFIG_DIR` | Custom Claude settings directory |
 
 ### Environment by Role

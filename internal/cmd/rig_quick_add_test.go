@@ -8,10 +8,14 @@ import (
 
 func TestFindOrCreateTown(t *testing.T) {
 	// Save original env and restore after test
+	origRoot := os.Getenv("GT_ROOT")
 	origTownRoot := os.Getenv("GT_TOWN_ROOT")
-	defer os.Setenv("GT_TOWN_ROOT", origTownRoot)
+	defer func() {
+		os.Setenv("GT_ROOT", origRoot)
+		os.Setenv("GT_TOWN_ROOT", origTownRoot)
+	}()
 
-	t.Run("respects GT_TOWN_ROOT when set", func(t *testing.T) {
+	t.Run("respects GT_ROOT when set", func(t *testing.T) {
 		// Create a valid town in temp dir
 		tmpTown := t.TempDir()
 		mayorDir := filepath.Join(tmpTown, "mayor")
@@ -19,7 +23,8 @@ func TestFindOrCreateTown(t *testing.T) {
 			t.Fatalf("mkdir mayor: %v", err)
 		}
 
-		os.Setenv("GT_TOWN_ROOT", tmpTown)
+		os.Setenv("GT_ROOT", tmpTown)
+		os.Setenv("GT_TOWN_ROOT", "")
 
 		result, err := findOrCreateTown()
 		if err != nil {
@@ -30,9 +35,29 @@ func TestFindOrCreateTown(t *testing.T) {
 		}
 	})
 
-	t.Run("ignores invalid GT_TOWN_ROOT", func(t *testing.T) {
-		// Set GT_TOWN_ROOT to a non-existent path
-		os.Setenv("GT_TOWN_ROOT", "/nonexistent/path/to/town")
+	t.Run("falls back to GT_TOWN_ROOT when GT_ROOT not set", func(t *testing.T) {
+		tmpTown := t.TempDir()
+		mayorDir := filepath.Join(tmpTown, "mayor")
+		if err := os.MkdirAll(mayorDir, 0755); err != nil {
+			t.Fatalf("mkdir mayor: %v", err)
+		}
+
+		os.Setenv("GT_ROOT", "")
+		os.Setenv("GT_TOWN_ROOT", tmpTown)
+
+		result, err := findOrCreateTown()
+		if err != nil {
+			t.Fatalf("findOrCreateTown() error = %v", err)
+		}
+		if result != tmpTown {
+			t.Errorf("findOrCreateTown() = %q, want %q (should use GT_TOWN_ROOT fallback)", result, tmpTown)
+		}
+	})
+
+	t.Run("ignores invalid GT_ROOT", func(t *testing.T) {
+		// Set GT_ROOT to a non-existent path
+		os.Setenv("GT_ROOT", "/nonexistent/path/to/town")
+		os.Setenv("GT_TOWN_ROOT", "")
 
 		// Create a valid town at ~/gt for fallback
 		home, err := os.UserHomeDir()
@@ -52,13 +77,13 @@ func TestFindOrCreateTown(t *testing.T) {
 		if err != nil {
 			t.Fatalf("findOrCreateTown() error = %v", err)
 		}
-		// Should fall back to ~/gt since GT_TOWN_ROOT is invalid
+		// Should fall back to ~/gt since GT_ROOT is invalid
 		if result != gtPath {
 			t.Logf("findOrCreateTown() = %q (fell back to valid town)", result)
 		}
 	})
 
-	t.Run("GT_TOWN_ROOT takes priority over fallback", func(t *testing.T) {
+	t.Run("GT_ROOT takes priority over fallback", func(t *testing.T) {
 		// Create two valid towns
 		tmpTown1 := t.TempDir()
 		tmpTown2 := t.TempDir()
@@ -70,16 +95,17 @@ func TestFindOrCreateTown(t *testing.T) {
 			t.Fatalf("mkdir mayor2: %v", err)
 		}
 
-		// Set GT_TOWN_ROOT to tmpTown1
-		os.Setenv("GT_TOWN_ROOT", tmpTown1)
+		// Set GT_ROOT to tmpTown1
+		os.Setenv("GT_ROOT", tmpTown1)
+		os.Setenv("GT_TOWN_ROOT", "")
 
 		result, err := findOrCreateTown()
 		if err != nil {
 			t.Fatalf("findOrCreateTown() error = %v", err)
 		}
-		// Should use GT_TOWN_ROOT, not any other valid town
+		// Should use GT_ROOT, not any other valid town
 		if result != tmpTown1 {
-			t.Errorf("findOrCreateTown() = %q, want %q (GT_TOWN_ROOT should take priority)", result, tmpTown1)
+			t.Errorf("findOrCreateTown() = %q, want %q (GT_ROOT should take priority)", result, tmpTown1)
 		}
 	})
 }

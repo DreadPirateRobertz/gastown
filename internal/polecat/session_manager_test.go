@@ -265,7 +265,8 @@ func TestPolecatStartInjectsFallbackEnvVars(t *testing.T) {
 		"GT_RIG",          // Rig name (was already there pre-PR)
 		"GT_POLECAT",      // Polecat name (was already there pre-PR)
 		"GT_ROLE",         // Role address (was already there pre-PR)
-		"GT_TOWN_ROOT",    // Town root for FindFromCwdWithFallback after worktree nuke
+		"GT_ROOT",         // Town root (canonical)
+		"GT_TOWN_ROOT",    // Town root (deprecated alias for GT_ROOT)
 	}
 
 	// Verify the env var map includes all required keys
@@ -274,6 +275,7 @@ func TestPolecatStartInjectsFallbackEnvVars(t *testing.T) {
 		"GT_POLECAT":      polecatName,
 		"GT_ROLE":         rigName + "/polecats/" + polecatName,
 		"GT_POLECAT_PATH": workDir,
+		"GT_ROOT":         townRoot,
 		"GT_TOWN_ROOT":    townRoot,
 	}
 

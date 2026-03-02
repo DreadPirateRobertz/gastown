@@ -7,16 +7,19 @@ import (
 
 func TestCleanGTEnv_PreservesDoltPort(t *testing.T) {
 	t.Setenv("GT_DOLT_PORT", "13307")
+	t.Setenv("GT_ROOT", "/some/town")
 	t.Setenv("GT_TOWN_ROOT", "/some/town")
 	t.Setenv("BD_ACTOR", "polecat/test")
 
 	env := CleanGTEnv()
 
-	var hasDoltPort, hasTownRoot, hasBDActor bool
+	var hasDoltPort, hasRoot, hasTownRoot, hasBDActor bool
 	for _, e := range env {
 		switch {
 		case strings.HasPrefix(e, "GT_DOLT_PORT="):
 			hasDoltPort = true
+		case strings.HasPrefix(e, "GT_ROOT="):
+			hasRoot = true
 		case strings.HasPrefix(e, "GT_TOWN_ROOT="):
 			hasTownRoot = true
 		case strings.HasPrefix(e, "BD_ACTOR="):
@@ -26,6 +29,9 @@ func TestCleanGTEnv_PreservesDoltPort(t *testing.T) {
 
 	if !hasDoltPort {
 		t.Error("CleanGTEnv stripped GT_DOLT_PORT — must preserve it")
+	}
+	if hasRoot {
+		t.Error("CleanGTEnv preserved GT_ROOT — must strip it")
 	}
 	if hasTownRoot {
 		t.Error("CleanGTEnv preserved GT_TOWN_ROOT — must strip it")
@@ -95,6 +101,7 @@ func TestNewBDCommand_InheritsEnv(t *testing.T) {
 
 func TestNewIsolatedBDCommand_SetEnv(t *testing.T) {
 	t.Setenv("GT_DOLT_PORT", "13307")
+	t.Setenv("GT_ROOT", "/some/town")
 	t.Setenv("GT_TOWN_ROOT", "/some/town")
 
 	cmd := NewIsolatedBDCommand("version")
@@ -102,11 +109,13 @@ func TestNewIsolatedBDCommand_SetEnv(t *testing.T) {
 		t.Fatal("NewIsolatedBDCommand should set cmd.Env")
 	}
 
-	var hasDoltPort, hasTownRoot bool
+	var hasDoltPort, hasRoot, hasTownRoot bool
 	for _, e := range cmd.Env {
 		switch {
 		case strings.HasPrefix(e, "GT_DOLT_PORT="):
 			hasDoltPort = true
+		case strings.HasPrefix(e, "GT_ROOT="):
+			hasRoot = true
 		case strings.HasPrefix(e, "GT_TOWN_ROOT="):
 			hasTownRoot = true
 		}
@@ -114,6 +123,9 @@ func TestNewIsolatedBDCommand_SetEnv(t *testing.T) {
 
 	if !hasDoltPort {
 		t.Error("NewIsolatedBDCommand stripped GT_DOLT_PORT")
+	}
+	if hasRoot {
+		t.Error("NewIsolatedBDCommand preserved GT_ROOT")
 	}
 	if hasTownRoot {
 		t.Error("NewIsolatedBDCommand preserved GT_TOWN_ROOT")

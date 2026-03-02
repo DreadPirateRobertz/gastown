@@ -94,12 +94,12 @@ func FindFromCwd() (string, error) {
 }
 
 // FindFromCwdOrError is like FindFromCwd but returns an error if not found.
-// If getcwd fails (e.g., worktree deleted), falls back to GT_TOWN_ROOT env var.
+// If getcwd fails (e.g., worktree deleted), falls back to GT_ROOT / GT_TOWN_ROOT env vars.
 func FindFromCwdOrError() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		// Fallback: try GT_TOWN_ROOT env var (set by polecat sessions)
-		if townRoot := os.Getenv("GT_TOWN_ROOT"); townRoot != "" {
+		// Fallback: try GT_ROOT (canonical) then GT_TOWN_ROOT (deprecated alias)
+		if townRoot := config.TownRootFromEnv(); townRoot != "" {
 			// Verify it's actually a workspace
 			if _, statErr := os.Stat(filepath.Join(townRoot, PrimaryMarker)); statErr == nil {
 				return townRoot, nil
@@ -111,14 +111,14 @@ func FindFromCwdOrError() (string, error) {
 }
 
 // FindFromCwdWithFallback is like FindFromCwdOrError but returns (townRoot, cwd, error).
-// If getcwd fails, returns (townRoot, "", nil) using GT_TOWN_ROOT fallback.
+// If getcwd fails, returns (townRoot, "", nil) using GT_ROOT / GT_TOWN_ROOT fallback.
 // This is useful for commands like `gt done` that need to continue even if the
 // working directory is deleted (e.g., polecat worktree nuked by Witness).
 func FindFromCwdWithFallback() (townRoot string, cwd string, err error) {
 	cwd, err = os.Getwd()
 	if err != nil {
-		// Fallback: try GT_TOWN_ROOT env var
-		if townRoot = os.Getenv("GT_TOWN_ROOT"); townRoot != "" {
+		// Fallback: try GT_ROOT (canonical) then GT_TOWN_ROOT (deprecated alias)
+		if townRoot = config.TownRootFromEnv(); townRoot != "" {
 			// Verify it's actually a workspace
 			if _, statErr := os.Stat(filepath.Join(townRoot, PrimaryMarker)); statErr == nil {
 				return townRoot, "", nil // cwd is gone but townRoot is valid

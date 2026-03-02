@@ -309,7 +309,8 @@ func (m *SessionManager) Start(polecat string, opts SessionStartOptions) error {
 		"GT_POLECAT":      polecat,
 		"GT_ROLE":         fmt.Sprintf("%s/polecats/%s", m.rig.Name, polecat),
 		"GT_POLECAT_PATH": workDir,
-		"GT_TOWN_ROOT":    townRoot,
+		"GT_ROOT":         townRoot,
+		"GT_TOWN_ROOT":    townRoot, // Deprecated alias for GT_ROOT
 	}
 	if polecatGitBranch != "" {
 		envVarsToInject["GT_BRANCH"] = polecatGitBranch
@@ -354,7 +355,8 @@ func (m *SessionManager) Start(polecat string, opts SessionStartOptions) error {
 		debugSession("SetEnvironment GT_BRANCH", m.tmux.SetEnvironment(sessionID, "GT_BRANCH", polecatGitBranch))
 	}
 	debugSession("SetEnvironment GT_POLECAT_PATH", m.tmux.SetEnvironment(sessionID, "GT_POLECAT_PATH", workDir))
-	debugSession("SetEnvironment GT_TOWN_ROOT", m.tmux.SetEnvironment(sessionID, "GT_TOWN_ROOT", townRoot))
+	debugSession("SetEnvironment GT_ROOT", m.tmux.SetEnvironment(sessionID, "GT_ROOT", townRoot))
+	debugSession("SetEnvironment GT_TOWN_ROOT", m.tmux.SetEnvironment(sessionID, "GT_TOWN_ROOT", townRoot)) // Deprecated alias
 
 	// Disable Dolt auto-commit in tmux session environment (gt-5cc2p).
 	// This ensures respawned processes also inherit the setting.

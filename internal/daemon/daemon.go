@@ -150,10 +150,14 @@ func New(config *Config) (*Daemon, error) {
 		logger.Printf("Warning: failed to initialize town registry: %v", err)
 	}
 
-	// Set GT_TOWN_ROOT in tmux global environment so run-shell subprocesses
-	// (e.g., gt cycle next/prev) can find the workspace even when CWD is $HOME.
+	// Set GT_ROOT (canonical) and GT_TOWN_ROOT (deprecated alias) in tmux global
+	// environment so run-shell subprocesses (e.g., gt cycle next/prev) can find
+	// the workspace even when CWD is $HOME.
 	// Non-fatal: tmux server may not be running yet — daemon creates sessions shortly.
 	t := tmux.NewTmux()
+	if err := t.SetGlobalEnvironment("GT_ROOT", config.TownRoot); err != nil {
+		logger.Printf("Warning: failed to set GT_ROOT in tmux global env: %v", err)
+	}
 	if err := t.SetGlobalEnvironment("GT_TOWN_ROOT", config.TownRoot); err != nil {
 		logger.Printf("Warning: failed to set GT_TOWN_ROOT in tmux global env: %v", err)
 	}

@@ -236,23 +236,23 @@ _gastown_hook() {
     local previous_exit_status=$?
 
     _gastown_enabled || {
-        unset GT_TOWN_ROOT GT_RIG
+        unset GT_ROOT GT_TOWN_ROOT GT_RIG
         return $previous_exit_status
     }
 
     _gastown_ignored && {
-        unset GT_TOWN_ROOT GT_RIG
+        unset GT_ROOT GT_TOWN_ROOT GT_RIG
         return $previous_exit_status
     }
 
     if ! git rev-parse --git-dir &>/dev/null; then
-        unset GT_TOWN_ROOT GT_RIG
+        unset GT_ROOT GT_TOWN_ROOT GT_RIG
         return $previous_exit_status
     fi
 
     local repo_root
     repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-        unset GT_TOWN_ROOT GT_RIG
+        unset GT_ROOT GT_TOWN_ROOT GT_RIG
         return $previous_exit_status
     }
 
@@ -271,7 +271,7 @@ _gastown_hook() {
         detect_output=$(gt rig detect "$repo_root" 2>/dev/null)
         eval "$detect_output"
         
-        if [[ -n "$GT_TOWN_ROOT" ]]; then
+        if [[ -n "$GT_ROOT" ]]; then
             (gt rig detect --cache "$repo_root" &>/dev/null &)
         elif [[ -n "$_GASTOWN_OFFER_ADD" ]]; then
             _gastown_offer_add "$repo_root"

@@ -1040,10 +1040,10 @@ func detectTownRootFromCwd() string {
 	}
 
 	// Fallback: try environment variables for town root
-	// GT_TOWN_ROOT is set by shell integration, GT_ROOT is set by session manager
+	// GT_ROOT is the canonical env var, GT_TOWN_ROOT is a deprecated alias.
 	// This enables handoff to work even when cwd detection fails due to
 	// detached HEAD, wrong branch, deleted worktree, etc.
-	for _, envName := range []string{"GT_TOWN_ROOT", "GT_ROOT"} {
+	for _, envName := range []string{"GT_ROOT", "GT_TOWN_ROOT"} {
 		if envRoot := os.Getenv(envName); envRoot != "" {
 			// Verify it's actually a workspace
 			if _, statErr := os.Stat(filepath.Join(envRoot, workspace.PrimaryMarker)); statErr == nil {
@@ -1056,12 +1056,12 @@ func detectTownRootFromCwd() string {
 		}
 	}
 
-	// Final fallback: read GT_TOWN_ROOT from tmux global environment.
+	// Final fallback: read GT_ROOT from tmux global environment.
 	// This handles the run-shell case where CWD is $HOME and process env
-	// vars aren't set — the daemon sets GT_TOWN_ROOT in tmux global env.
+	// vars aren't set — the daemon sets GT_ROOT in tmux global env.
 	if socket := tmux.SocketFromEnv(); socket != "" {
 		t := tmux.NewTmuxWithSocket(socket)
-		if envRoot, err := t.GetGlobalEnvironment("GT_TOWN_ROOT"); err == nil && envRoot != "" {
+		if envRoot, err := t.GetGlobalEnvironment("GT_ROOT"); err == nil && envRoot != "" {
 			if _, statErr := os.Stat(filepath.Join(envRoot, workspace.PrimaryMarker)); statErr == nil {
 				return envRoot
 			}

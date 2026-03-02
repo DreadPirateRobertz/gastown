@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/style"
 	"github.com/steveyegge/gastown/internal/workspace"
 )
@@ -165,8 +166,8 @@ func sanitizeRigName(name string) string {
 }
 
 func findOrCreateTown() (string, error) {
-	// Priority 1: GT_TOWN_ROOT env var (explicit user preference)
-	if townRoot := os.Getenv("GT_TOWN_ROOT"); townRoot != "" {
+	// Priority 1: GT_ROOT env var (canonical), falling back to GT_TOWN_ROOT (deprecated)
+	if townRoot := config.TownRootFromEnv(); townRoot != "" {
 		if isValidTown(townRoot) {
 			return townRoot, nil
 		}

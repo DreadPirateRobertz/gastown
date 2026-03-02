@@ -462,3 +462,14 @@ func EnvToSlice(env map[string]string) []string {
 	}
 	return result
 }
+
+// TownRootFromEnv reads the town root from environment variables.
+// GT_ROOT is the canonical env var. GT_TOWN_ROOT is a deprecated alias
+// kept for backward compatibility with shell integration and older scripts.
+// Returns empty string if neither is set.
+func TownRootFromEnv() string {
+	if v := os.Getenv("GT_ROOT"); v != "" {
+		return v
+	}
+	return os.Getenv("GT_TOWN_ROOT")
+}

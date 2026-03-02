@@ -13,7 +13,7 @@ type GlobalEnvAccessor interface {
 	SetGlobalEnvironment(key, value string) error
 }
 
-// TmuxGlobalEnvCheck verifies that GT_TOWN_ROOT is set in the tmux global
+// TmuxGlobalEnvCheck verifies that GT_ROOT is set in the tmux global
 // environment. This is needed for run-shell subprocesses (e.g., gt cycle
 // next/prev) where CWD is $HOME and process env vars aren't available.
 type TmuxGlobalEnvCheck struct {
@@ -27,7 +27,7 @@ func NewTmuxGlobalEnvCheck() *TmuxGlobalEnvCheck {
 		FixableCheck: FixableCheck{
 			BaseCheck: BaseCheck{
 				CheckName:        "tmux-global-env",
-				CheckDescription: "Verify GT_TOWN_ROOT is set in tmux global environment",
+				CheckDescription: "Verify GT_ROOT is set in tmux global environment",
 				CheckCategory:    CategoryInfrastructure,
 			},
 		},
@@ -41,14 +41,14 @@ func NewTmuxGlobalEnvCheckWithAccessor(accessor GlobalEnvAccessor) *TmuxGlobalEn
 	return c
 }
 
-// Run checks that GT_TOWN_ROOT is set correctly in the tmux global environment.
+// Run checks that GT_ROOT is set correctly in the tmux global environment.
 func (c *TmuxGlobalEnvCheck) Run(ctx *CheckContext) *CheckResult {
 	accessor := c.accessor
 	if accessor == nil {
 		accessor = tmux.NewTmux()
 	}
 
-	val, err := accessor.GetGlobalEnvironment("GT_TOWN_ROOT")
+	val, err := accessor.GetGlobalEnvironment("GT_ROOT")
 	if err != nil {
 		// No tmux server running — nothing to check or fix.
 		if errors.Is(err, tmux.ErrNoServer) {
@@ -62,12 +62,12 @@ func (c *TmuxGlobalEnvCheck) Run(ctx *CheckContext) *CheckResult {
 		return &CheckResult{
 			Name:    c.Name(),
 			Status:  StatusWarning,
-			Message: "GT_TOWN_ROOT not set in tmux global environment",
+			Message: "GT_ROOT not set in tmux global environment",
 			Details: []string{
-				"The daemon sets GT_TOWN_ROOT in tmux global env for run-shell subprocesses.",
+				"The daemon sets GT_ROOT in tmux global env for run-shell subprocesses.",
 				"Without it, prefix-based cycle groups (prefix+n/p) fail when CWD is $HOME.",
 			},
-			FixHint: "Run 'gt doctor --fix' to set GT_TOWN_ROOT in tmux global env",
+			FixHint: "Run 'gt doctor --fix' to set GT_ROOT in tmux global env",
 		}
 	}
 
@@ -75,27 +75,31 @@ func (c *TmuxGlobalEnvCheck) Run(ctx *CheckContext) *CheckResult {
 		return &CheckResult{
 			Name:    c.Name(),
 			Status:  StatusWarning,
-			Message: fmt.Sprintf("GT_TOWN_ROOT mismatch in tmux global env: %q (expected %q)", val, ctx.TownRoot),
+			Message: fmt.Sprintf("GT_ROOT mismatch in tmux global env: %q (expected %q)", val, ctx.TownRoot),
 			Details: []string{
-				"The daemon sets GT_TOWN_ROOT in tmux global env for run-shell subprocesses.",
+				"The daemon sets GT_ROOT in tmux global env for run-shell subprocesses.",
 				"Without it, prefix-based cycle groups (prefix+n/p) fail when CWD is $HOME.",
 			},
-			FixHint: "Run 'gt doctor --fix' to set GT_TOWN_ROOT in tmux global env",
+			FixHint: "Run 'gt doctor --fix' to set GT_ROOT in tmux global env",
 		}
 	}
 
 	return &CheckResult{
 		Name:    c.Name(),
 		Status:  StatusOK,
-		Message: fmt.Sprintf("GT_TOWN_ROOT=%s in tmux global env", val),
+		Message: fmt.Sprintf("GT_ROOT=%s in tmux global env", val),
 	}
 }
 
-// Fix sets GT_TOWN_ROOT in the tmux global environment.
+// Fix sets GT_ROOT (and deprecated alias GT_TOWN_ROOT) in the tmux global environment.
 func (c *TmuxGlobalEnvCheck) Fix(ctx *CheckContext) error {
 	accessor := c.accessor
 	if accessor == nil {
 		accessor = tmux.NewTmux()
 	}
+	if err := accessor.SetGlobalEnvironment("GT_ROOT", ctx.TownRoot); err != nil {
+		return err
+	}
+	// Also set deprecated alias for backward compatibility
 	return accessor.SetGlobalEnvironment("GT_TOWN_ROOT", ctx.TownRoot)
 }

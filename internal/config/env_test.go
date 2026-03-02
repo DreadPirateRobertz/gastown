@@ -945,3 +945,29 @@ func splitAttrs(attrs string) []string {
 func containsStr(s, sub string) bool {
 	return strings.Contains(s, sub)
 }
+
+func TestTownRootFromEnv(t *testing.T) {
+	t.Run("returns GT_ROOT when set", func(t *testing.T) {
+		t.Setenv("GT_ROOT", "/town/root")
+		t.Setenv("GT_TOWN_ROOT", "/other/path")
+		if got := TownRootFromEnv(); got != "/town/root" {
+			t.Errorf("TownRootFromEnv() = %q, want %q", got, "/town/root")
+		}
+	})
+
+	t.Run("falls back to GT_TOWN_ROOT", func(t *testing.T) {
+		t.Setenv("GT_ROOT", "")
+		t.Setenv("GT_TOWN_ROOT", "/town/root")
+		if got := TownRootFromEnv(); got != "/town/root" {
+			t.Errorf("TownRootFromEnv() = %q, want %q", got, "/town/root")
+		}
+	})
+
+	t.Run("returns empty when neither set", func(t *testing.T) {
+		t.Setenv("GT_ROOT", "")
+		t.Setenv("GT_TOWN_ROOT", "")
+		if got := TownRootFromEnv(); got != "" {
+			t.Errorf("TownRootFromEnv() = %q, want empty", got)
+		}
+	})
+}
