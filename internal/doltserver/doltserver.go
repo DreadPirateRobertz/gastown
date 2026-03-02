@@ -1190,16 +1190,48 @@ func (c *Config) displayDSN() string {
 	return c.User
 }
 
+// dbCache deduplicates and caches SHOW DATABASES results to prevent the
+// "thundering herd" problem where multiple concurrent callers each spawn a
+// dolt sql subprocess. See GH#2180.
+var dbCache = struct {
+	mu       sync.Mutex
+	result   []string
+	err      error
+	updated  time.Time
+	inflight chan struct{} // non-nil when a fetch is in progress
+}{} //nolint:gochecknoglobals // process-level cache, intentional
+
+const dbCacheTTL = 30 * time.Second
+
+// InvalidateDBCache clears the cached ListDatabases result, forcing the next
+// call to re-query. Use after operations that change the database set (e.g.,
+// CREATE DATABASE, DROP DATABASE, InitRig).
+func InvalidateDBCache() {
+	dbCache.mu.Lock()
+	dbCache.result = nil
+	dbCache.err = nil
+	dbCache.updated = time.Time{}
+	dbCache.mu.Unlock()
+}
+
 // ListDatabases returns the list of available rig databases.
 // For local servers, scans the data directory on disk.
 // For remote servers, queries SHOW DATABASES via SQL.
+//
+// Results are cached for 30 seconds and concurrent callers share a single
+// in-flight query to avoid overwhelming the Dolt server (GH#2180).
 func ListDatabases(townRoot string) ([]string, error) {
 	config := DefaultConfig(townRoot)
 
 	if config.IsRemote() {
-		return listDatabasesRemote(config)
+		return listDatabasesCached(config)
 	}
 
+	return listDatabasesLocal(config)
+}
+
+// listDatabasesLocal scans the filesystem for valid Dolt database directories.
+func listDatabasesLocal(config *Config) ([]string, error) {
 	entries, err := os.ReadDir(config.DataDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1230,6 +1262,60 @@ func ListDatabases(townRoot string) ([]string, error) {
 	}
 
 	return databases, nil
+}
+
+// listDatabasesCached returns cached SHOW DATABASES results for remote servers,
+// deduplicating concurrent queries via a shared in-flight channel.
+func listDatabasesCached(config *Config) ([]string, error) {
+	dbCache.mu.Lock()
+
+	// Return cached result if fresh.
+	if dbCache.result != nil && time.Since(dbCache.updated) < dbCacheTTL {
+		result := make([]string, len(dbCache.result))
+		copy(result, dbCache.result)
+		dbCache.mu.Unlock()
+		return result, nil
+	}
+
+	// If another goroutine is already fetching, wait for it.
+	if dbCache.inflight != nil {
+		ch := dbCache.inflight
+		dbCache.mu.Unlock()
+		<-ch
+		// Re-read the result the fetcher stored.
+		dbCache.mu.Lock()
+		result := make([]string, len(dbCache.result))
+		copy(result, dbCache.result)
+		err := dbCache.err
+		dbCache.mu.Unlock()
+		return result, err
+	}
+
+	// We're the fetcher. Mark in-flight.
+	ch := make(chan struct{})
+	dbCache.inflight = ch
+	dbCache.mu.Unlock()
+
+	// Execute the actual query.
+	result, err := listDatabasesRemote(config)
+
+	// Store result and wake waiters.
+	dbCache.mu.Lock()
+	dbCache.result = result
+	dbCache.err = err
+	if err == nil {
+		dbCache.updated = time.Now()
+	}
+	dbCache.inflight = nil
+	dbCache.mu.Unlock()
+	close(ch)
+
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(result))
+	copy(out, result)
+	return out, nil
 }
 
 // listDatabasesRemote queries SHOW DATABASES on a remote Dolt server.
@@ -1545,6 +1631,8 @@ func InitRig(townRoot, rigName string) (serverWasRunning bool, created bool, err
 			return false, false, fmt.Errorf("initializing Dolt database: %w\n%s", err, output)
 		}
 	}
+
+	InvalidateDBCache() // New database created — bust the cache.
 
 	// Update metadata.json to point to the server
 	if err := EnsureMetadata(townRoot, rigName); err != nil {
@@ -1915,6 +2003,8 @@ func RemoveDatabase(townRoot, dbName string, force bool) error {
 		// recreated on subsequent connections. `database` is a reserved word, so backtick-quote it.
 		_ = serverExecSQL(townRoot, fmt.Sprintf("DELETE FROM dolt_branch_control WHERE `database` = '%s'", dbName))
 	}
+
+	InvalidateDBCache() // Database removed — bust the cache.
 
 	// Remove the directory
 	if err := os.RemoveAll(dbPath); err != nil {
