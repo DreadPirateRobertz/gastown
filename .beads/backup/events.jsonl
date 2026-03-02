@@ -1,142 +1,42 @@
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:54Z","event_type":"created","id":1,"issue_id":"test-noblk1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:54Z","event_type":"created","id":2,"issue_id":"test-blkr1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:54Z","event_type":"created","id":3,"issue_id":"test-blkd1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:54Z","event_type":"created","id":4,"issue_id":"test-clblkr","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:54Z","event_type":"created","id":5,"issue_id":"test-clblkd","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:54Z","event_type":"created","id":6,"issue_id":"test-pcpar","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:54Z","event_type":"created","id":7,"issue_id":"test-pcchld","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:55Z","event_type":"created","id":8,"issue_id":"test-convoy1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:55Z","event_type":"created","id":9,"issue_id":"test-closed1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:55Z","event_type":"created","id":10,"issue_id":"test-assigned1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:55Z","event_type":"created","id":11,"issue_id":"test-ready1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:55Z","event_type":"created","id":12,"issue_id":"gt-close1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:55Z","event_type":"closed","id":13,"issue_id":"gt-close1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:55Z","event_type":"created","id":14,"issue_id":"gt-open1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:57Z","event_type":"created","id":15,"issue_id":"test-convoy2","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:57Z","event_type":"created","id":16,"issue_id":"test-epic1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:57Z","event_type":"created","id":17,"issue_id":"test-task2","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:58Z","event_type":"created","id":18,"issue_id":"test-convoy3","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:58Z","event_type":"created","id":19,"issue_id":"test-blocker3","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:58Z","event_type":"created","id":20,"issue_id":"test-blocked3","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:54:58Z","event_type":"created","id":21,"issue_id":"test-unblk3","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:00Z","event_type":"created","id":22,"issue_id":"test-convoy4","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:00Z","event_type":"created","id":23,"issue_id":"test-cl4a","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:00Z","event_type":"created","id":24,"issue_id":"test-cl4b","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:00Z","event_type":"created","id":25,"issue_id":"test-convoy5","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:00Z","event_type":"created","id":26,"issue_id":"test-task5","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"created","id":27,"issue_id":"test-cv-staged1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"created","id":28,"issue_id":"test-trk-stg1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"status_changed","id":29,"issue_id":"test-cv-staged1","new_value":"{\"status\":\"staged_ready\"}","old_value":"{\"id\":\"test-cv-staged1\",\"title\":\"Staged Ready Convoy\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\",\"created_at\":\"2026-02-23T19:55:06Z\",\"updated_at\":\"2026-02-23T19:55:06Z\"}"}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"created","id":30,"issue_id":"test-cv-staged2","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"created","id":31,"issue_id":"test-trk-stg2","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"status_changed","id":32,"issue_id":"test-cv-staged2","new_value":"{\"status\":\"staged_warnings\"}","old_value":"{\"id\":\"test-cv-staged2\",\"title\":\"Staged Warnings Convoy\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\",\"created_at\":\"2026-02-23T19:55:06Z\",\"updated_at\":\"2026-02-23T19:55:06Z\"}"}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"created","id":33,"issue_id":"test-cv-launch","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"created","id":34,"issue_id":"test-trk-lnch","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"status_changed","id":35,"issue_id":"test-cv-launch","new_value":"{\"status\":\"staged_ready\"}","old_value":"{\"id\":\"test-cv-launch\",\"title\":\"Launched Convoy\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\",\"created_at\":\"2026-02-23T19:55:06Z\",\"updated_at\":\"2026-02-23T19:55:06Z\"}"}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:05Z","event_type":"status_changed","id":36,"issue_id":"test-cv-launch","new_value":"{\"status\":\"open\"}","old_value":"{\"id\":\"test-cv-launch\",\"title\":\"Launched Convoy\",\"status\":\"staged_ready\",\"priority\":2,\"issue_type\":\"task\",\"created_at\":\"2026-02-23T19:55:06Z\",\"updated_at\":\"2026-02-23T19:55:06Z\"}"}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:07Z","event_type":"created","id":37,"issue_id":"hq-cv-test1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:07Z","event_type":"created","id":38,"issue_id":"gt-tracked1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:07Z","event_type":"created","id":39,"issue_id":"gt-other","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:07Z","event_type":"created","id":40,"issue_id":"hq-cv-other","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:07Z","event_type":"created","id":41,"issue_id":"hq-cv-open","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:07Z","event_type":"created","id":42,"issue_id":"hq-cv-closed","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":43,"issue_id":"sh-rig1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":44,"issue_id":"sh-rig1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":45,"issue_id":"hq-task1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":46,"issue_id":"hq-task1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":47,"issue_id":"gt-task1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":48,"issue_id":"gt-task1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":49,"issue_id":"gt-active1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":50,"issue_id":"gt-active1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":51,"issue_id":"sh-parked1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":52,"issue_id":"sh-parked1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":53,"issue_id":"hq-always1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":54,"issue_id":"hq-always1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":55,"issue_id":"gt-hw1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":56,"issue_id":"gt-hw1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":57,"issue_id":"hq-hw1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":58,"issue_id":"hq-hw1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":59,"issue_id":"gt-hw2","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":60,"issue_id":"gt-hw2","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":61,"issue_id":"gt-open2","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"created","id":62,"issue_id":"gt-nohq1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T12:55:15Z","event_type":"closed","id":63,"issue_id":"gt-nohq1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"created","id":64,"issue_id":"gt-open1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"created","id":65,"issue_id":"gt-active-park-1771876836687748000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"closed","id":66,"issue_id":"gt-active-park-1771876836687748000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"created","id":67,"issue_id":"sh-parked-park-1771876836687749000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"closed","id":68,"issue_id":"sh-parked-park-1771876836687749000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"created","id":69,"issue_id":"gt-hw-1771876836733993000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"closed","id":70,"issue_id":"gt-hw-1771876836733993000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"created","id":71,"issue_id":"gt-dedup-1771876836764788000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"closed","id":72,"issue_id":"gt-dedup-1771876836764788000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"created","id":73,"issue_id":"gt-dedup-1771876836764788000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"closed","id":74,"issue_id":"gt-dedup-1771876836764788000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T13:00:36Z","event_type":"created","id":75,"issue_id":"gt-open2-1771876836878210000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":76,"issue_id":"gt-open1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":77,"issue_id":"sh-rig1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":78,"issue_id":"sh-rig1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":79,"issue_id":"hq-task1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":80,"issue_id":"hq-task1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":81,"issue_id":"gt-task1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":82,"issue_id":"gt-task1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":83,"issue_id":"gt-active-park-1771899061380338000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":84,"issue_id":"gt-active-park-1771899061380338000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":85,"issue_id":"sh-parked-park-1771899061380340000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":86,"issue_id":"sh-parked-park-1771899061380340000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":87,"issue_id":"hq-always1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":88,"issue_id":"hq-always1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":89,"issue_id":"gt-hw-1771899061459614000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":90,"issue_id":"gt-hw-1771899061459614000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":91,"issue_id":"gt-dedup-1771899061489598000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":92,"issue_id":"gt-dedup-1771899061489598000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":93,"issue_id":"gt-dedup-1771899061489598000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":94,"issue_id":"gt-dedup-1771899061489598000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":95,"issue_id":"hq-hw1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":96,"issue_id":"hq-hw1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":97,"issue_id":"gt-hw2","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"closed","id":98,"issue_id":"gt-hw2","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:01Z","event_type":"created","id":99,"issue_id":"gt-open2-1771899061584993000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:05Z","event_type":"created","id":100,"issue_id":"gt-close1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:05Z","event_type":"closed","id":101,"issue_id":"gt-close1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:05Z","event_type":"created","id":102,"issue_id":"gt-open1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":103,"issue_id":"sh-rig1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":104,"issue_id":"sh-rig1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":105,"issue_id":"hq-task1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":106,"issue_id":"hq-task1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":107,"issue_id":"gt-task1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":108,"issue_id":"gt-task1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":109,"issue_id":"gt-active-park-1771899067648487000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":110,"issue_id":"gt-active-park-1771899067648487000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":111,"issue_id":"sh-parked-park-1771899067648487000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":112,"issue_id":"sh-parked-park-1771899067648487000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":113,"issue_id":"hq-always1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":114,"issue_id":"hq-always1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":115,"issue_id":"gt-hw-1771899067728291000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":116,"issue_id":"gt-hw-1771899067728291000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":117,"issue_id":"gt-dedup-1771899067761559000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":118,"issue_id":"gt-dedup-1771899067761559000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":119,"issue_id":"gt-dedup-1771899067761559000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":120,"issue_id":"gt-dedup-1771899067761559000","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":121,"issue_id":"hq-hw1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":122,"issue_id":"hq-hw1","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":123,"issue_id":"gt-hw2","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":124,"issue_id":"gt-hw2","new_value":"done","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":125,"issue_id":"gt-open2-1771899067865407000","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"created","id":126,"issue_id":"gt-nohq1","new_value":"","old_value":""}
-{"actor":"test","comment":null,"created_at":"2026-02-23T19:11:07Z","event_type":"closed","id":127,"issue_id":"gt-nohq1","new_value":"done","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:16Z","event_type":"created","id":128,"issue_id":"gt-8mg","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:17Z","event_type":"created","id":129,"issue_id":"gt-5ri","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:18Z","event_type":"created","id":130,"issue_id":"gt-t89","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:19Z","event_type":"created","id":131,"issue_id":"gt-3lp","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:20Z","event_type":"created","id":132,"issue_id":"gt-3yr","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:21Z","event_type":"created","id":133,"issue_id":"gt-45h","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:22Z","event_type":"created","id":134,"issue_id":"gt-12t","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:23Z","event_type":"created","id":135,"issue_id":"gt-oex","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:26Z","event_type":"created","id":136,"issue_id":"gt-218","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:27Z","event_type":"created","id":137,"issue_id":"gt-ien","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:28Z","event_type":"created","id":138,"issue_id":"gt-jom","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:29Z","event_type":"created","id":139,"issue_id":"gt-tgh","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:30Z","event_type":"created","id":140,"issue_id":"gt-bwe","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:31Z","event_type":"created","id":141,"issue_id":"gt-35l","new_value":"","old_value":""}
-{"actor":"mayor","comment":null,"created_at":"2026-03-01T19:02:32Z","event_type":"created","id":142,"issue_id":"gt-wo4","new_value":"","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:35:46Z","event_type":"closed","id":1,"issue_id":"gastown-wisp-wisp-kajs","new_value":"Inbox empty, no messages or escalations","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:35:58Z","event_type":"closed","id":2,"issue_id":"gastown-wisp-wisp-mcjt","new_value":"Merge queue empty, no branches to process","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:03Z","event_type":"closed","id":3,"issue_id":"gastown-wisp-wisp-f6zm","new_value":"Queue empty, no branches to process","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:03Z","event_type":"closed","id":4,"issue_id":"gastown-wisp-wisp-yqr2","new_value":"Queue empty, no branches to process","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:03Z","event_type":"closed","id":5,"issue_id":"gastown-wisp-wisp-zg66","new_value":"Queue empty, no branches to process","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:03Z","event_type":"closed","id":6,"issue_id":"gastown-wisp-wisp-bosu","new_value":"Queue empty, no branches to process","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:03Z","event_type":"closed","id":7,"issue_id":"gastown-wisp-wisp-h3in","new_value":"Queue empty, no branches to process","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:08Z","event_type":"closed","id":8,"issue_id":"gastown-wisp-wisp-wray","new_value":"Patrol summary: 0 branches merged, queue empty. Fixed missing issue_prefix config on startup.","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:15Z","event_type":"closed","id":9,"issue_id":"gastown-wisp-wisp-pgyu","new_value":"Auto-land disabled, no integration branches to process","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:23Z","event_type":"closed","id":10,"issue_id":"gastown-wisp-wisp-lz5r","new_value":"Session healthy: 2MB RSS, fresh context, low usage","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:26Z","event_type":"closed","id":11,"issue_id":"gastown-wisp-wisp-8ebr","new_value":"No stale messages or orphaned MRs","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:31Z","event_type":"closed","id":12,"issue_id":"gastown-wisp-wisp-3ila","new_value":"Queue empty, session healthy. Squash and loop.","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:40Z","event_type":"closed","id":13,"issue_id":"gastown-wisp-wisp-4nih","new_value":"Patrol cycle complete: 0 branches merged, queue empty","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:36:54Z","event_type":"closed","id":14,"issue_id":"gastown-wisp-wisp-6i6m","new_value":"Inbox empty","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:04Z","event_type":"closed","id":15,"issue_id":"gastown-wisp-wisp-03ij","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:04Z","event_type":"closed","id":16,"issue_id":"gastown-wisp-wisp-ftjy","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":17,"issue_id":"gastown-wisp-wisp-xwq5","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":18,"issue_id":"gastown-wisp-wisp-lphj","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":19,"issue_id":"gastown-wisp-wisp-gp2x","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":20,"issue_id":"gastown-wisp-wisp-0jzo","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":21,"issue_id":"gastown-wisp-wisp-m0wr","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":22,"issue_id":"gastown-wisp-wisp-bprn","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":23,"issue_id":"gastown-wisp-wisp-7llq","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":24,"issue_id":"gastown-wisp-wisp-m6ze","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:05Z","event_type":"closed","id":25,"issue_id":"gastown-wisp-wisp-f10f","new_value":"Queue empty, patrol cycle 2 complete","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-02-24T05:37:08Z","event_type":"closed","id":26,"issue_id":"gastown-wisp-wisp-60kc","new_value":"Patrol cycle 2 complete: 0 branches, queue empty","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:07:17Z","event_type":"closed","id":27,"issue_id":"gastown-wisp-wisp-icq9","new_value":"Closed","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:07:27Z","event_type":"closed","id":28,"issue_id":"gastown-wisp-wisp-lxdg","new_value":"Closed","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:07:35Z","event_type":"closed","id":29,"issue_id":"gastown-wisp-wisp-w2fl","new_value":"Closed","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:07:43Z","event_type":"closed","id":30,"issue_id":"gastown-wisp-wisp-vtxg","new_value":"Closed","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:07:51Z","event_type":"closed","id":31,"issue_id":"gastown-wisp-wisp-z3d5","new_value":"Closed","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:07:58Z","event_type":"closed","id":32,"issue_id":"gastown-wisp-wisp-vs0a","new_value":"Closed","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:08:04Z","event_type":"closed","id":33,"issue_id":"gastown-wisp-wisp-3xcv","new_value":"patrol cycle complete: Patrol cycle: queue empty, inbox clean, no branches to merge. Session healthy (RSS 2MB). Looping.","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:08:19Z","event_type":"closed","id":34,"issue_id":"gastown-wisp-d79u","new_value":"patrol cycle complete: Cycle 2: queue empty, inbox clean. No work pending. Session healthy. Looping.","old_value":""}
+{"actor":"gastown/refinery","comment":"","created_at":"2026-03-01T19:08:32Z","event_type":"closed","id":35,"issue_id":"gastown-wisp-cxmm","new_value":"patrol cycle complete: Cycle 3: queue empty x3 consecutive, inbox clean. No work pending. Handing off.","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-03-01T19:09:32Z","event_type":"closed","id":36,"issue_id":"gastown-wisp-oir6","new_value":"patrol cycle complete: Patrol 1: Rig idle. No polecats, no in-progress beads, no mail. Deacon alive, refinery running (7h). Reconnected beads_gastown database after bd init created orphan. No incidents.","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-03-01T19:10:35Z","event_type":"closed","id":37,"issue_id":"gastown-wisp-c7cm","new_value":"patrol cycle complete: Patrol 2: Rig idle. No polecats, no mail. Deacon alive, refinery up 7h. No incidents.","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-03-01T19:11:40Z","event_type":"closed","id":38,"issue_id":"gastown-wisp-d1f1","new_value":"patrol cycle complete: Patrol 3: Rig idle. No polecats, no mail. Deacon alive, refinery up 7h. No incidents.","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-03-01T19:13:01Z","event_type":"closed","id":39,"issue_id":"gastown-wisp-4zaw","new_value":"patrol cycle complete: Patrol 4: Rig idle. No polecats, no mail. Deacon alive, refinery up 7h. No incidents.","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-03-01T19:14:52Z","event_type":"closed","id":40,"issue_id":"gastown-wisp-y1ei","new_value":"patrol cycle complete: Patrol 5: Rig idle. No polecats, no mail. Deacon alive, refinery up 7h. No incidents.","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-03-01T19:17:14Z","event_type":"closed","id":41,"issue_id":"gastown-wisp-z2p1","new_value":"patrol cycle complete: Patrol 6: Rig idle. No polecats, no mail. Deacon alive, refinery up 7h. No incidents.","old_value":""}
+{"actor":"gastown/witness","comment":"","created_at":"2026-03-01T19:20:35Z","event_type":"closed","id":42,"issue_id":"gastown-wisp-1r3y","new_value":"patrol cycle complete: Patrol 7: Rig idle. No polecats, no mail. Deacon alive, refinery up 7h. No incidents.","old_value":""}
