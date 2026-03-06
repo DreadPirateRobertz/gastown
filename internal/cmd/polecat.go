@@ -423,7 +423,7 @@ func runPolecatList(cmd *cobra.Command, args []string) error {
 
 	if polecatListAll {
 		// List all rigs
-		allRigs, _, err := getAllRigs()
+		allRigs, err := getAllRigs()
 		if err != nil {
 			return err
 		}

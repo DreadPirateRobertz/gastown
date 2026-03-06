@@ -39,7 +39,7 @@ func runCrewList(cmd *cobra.Command, args []string) error {
 
 	var rigs []*rig.Rig
 	if crewListAll {
-		allRigs, _, err := getAllRigs()
+		allRigs, err := getAllRigs()
 		if err != nil {
 			return err
 		}
