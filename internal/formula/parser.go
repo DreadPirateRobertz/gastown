@@ -142,9 +142,64 @@ func (f *Formula) validateWorkflow() error {
 		}
 	}
 
+	// Validate model routing constraints
+	for _, step := range f.Steps {
+		if err := validateStepConstraints(step); err != nil {
+			return fmt.Errorf("step %q: %w", step.ID, err)
+		}
+	}
+
 	// Check for cycles
 	if err := f.checkCycles(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validCapabilities is the set of recognized capability names for step constraints.
+var validCapabilities = map[string]bool{
+	"vision":         true,
+	"code_execution": true,
+}
+
+// validAccessTypes is the set of recognized access type values.
+var validAccessTypes = map[string]bool{
+	"subscription": true,
+	"api_key":      true,
+	"local":        true,
+}
+
+// validateStepConstraints checks model routing constraint fields on a step.
+func validateStepConstraints(step Step) error {
+	// model and provider are mutually exclusive.
+	if step.Model != "" && step.Provider != "" {
+		return fmt.Errorf("model and provider cannot both be set")
+	}
+
+	// Validate access_type.
+	if step.AccessType != "" && !validAccessTypes[step.AccessType] {
+		return fmt.Errorf("invalid access_type %q (valid: subscription, api_key, local)", step.AccessType)
+	}
+
+	// Validate requires capabilities.
+	for _, cap := range step.Requires {
+		if !validCapabilities[cap] {
+			return fmt.Errorf("unknown capability %q in requires (valid: vision, code_execution)", cap)
+		}
+	}
+
+	// Validate score ranges.
+	if step.MinMMLU < 0 || step.MinMMLU > 100 {
+		return fmt.Errorf("min_mmlu must be between 0 and 100, got %.1f", step.MinMMLU)
+	}
+	if step.MinSWE < 0 || step.MinSWE > 100 {
+		return fmt.Errorf("min_swe must be between 0 and 100, got %.1f", step.MinSWE)
+	}
+
+	// Validate max_cost.
+	if step.MaxCost < 0 {
+		return fmt.Errorf("max_cost must be non-negative, got %.4f", step.MaxCost)
 	}
 
 	return nil

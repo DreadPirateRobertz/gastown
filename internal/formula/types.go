@@ -100,6 +100,23 @@ type Step struct {
 	Needs       []string `toml:"needs"`
 	Parallel    bool     `toml:"parallel"`   // If true, this step can run concurrently with other parallel steps that share the same needs
 	Acceptance  string   `toml:"acceptance"` // Exit criteria for this step (used by Ralph loop mode)
+
+	// Model routing constraints (all optional, backward-compatible).
+	// Model is an exact model ID (e.g., "claude-sonnet-4-6") or "auto" for heuristic routing.
+	Model string `toml:"model"`
+	// Provider restricts to a specific provider (e.g., "anthropic", "ollama").
+	// Mutually exclusive with Model (parser error if both set).
+	Provider string `toml:"provider"`
+	// AccessType constrains access method: "subscription", "api_key", "local".
+	AccessType string `toml:"access_type"`
+	// MinMMLU sets a minimum MMLU benchmark score threshold.
+	MinMMLU float64 `toml:"min_mmlu"`
+	// MinSWE sets a minimum SWE-bench score threshold.
+	MinSWE float64 `toml:"min_swe"`
+	// Requires lists required capabilities: "vision", "code_execution".
+	Requires []string `toml:"requires"`
+	// MaxCost sets a maximum USD per 1K tokens (combined input+output average).
+	MaxCost float64 `toml:"max_cost"`
 }
 
 // Template represents a template step in an expansion formula.
