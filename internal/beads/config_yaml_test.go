@@ -1,14 +1,15 @@
 package beads
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-func TestEnsureConfigYAMLIfMissing_DoesNotOverwriteExisting(t *testing.T) {
+func TestEnsureConfigYAMLIfMissing_DoesNotOverwriteExistingYAML(t *testing.T) {
 	beadsDir := t.TempDir()
+	// Pre-existing legacy config.yaml should be preserved
 	configPath := filepath.Join(beadsDir, "config.yaml")
 	original := "prefix: keep\nissue-prefix: keep\n"
 	if err := os.WriteFile(configPath, []byte(original), 0644); err != nil {
@@ -28,6 +29,89 @@ func TestEnsureConfigYAMLIfMissing_DoesNotOverwriteExisting(t *testing.T) {
 	}
 }
 
+func TestEnsureConfigYAMLIfMissing_DoesNotOverwriteExistingJSON(t *testing.T) {
+	beadsDir := t.TempDir()
+	configPath := filepath.Join(beadsDir, "config.json")
+	original := `{"prefix":"keep","issue-prefix":"keep"}` + "\n"
+	if err := os.WriteFile(configPath, []byte(original), 0644); err != nil {
+		t.Fatalf("write config.json: %v", err)
+	}
+
+	if err := EnsureConfigYAMLIfMissing(beadsDir, "hq"); err != nil {
+		t.Fatalf("EnsureConfigYAMLIfMissing: %v", err)
+	}
+
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config.json: %v", err)
+	}
+	if string(after) != original {
+		t.Fatalf("config.json changed:\n got: %q\nwant: %q", string(after), original)
+	}
+}
+
+func TestEnsureConfig_WritesJSON(t *testing.T) {
+	beadsDir := t.TempDir()
+
+	if err := EnsureConfigYAML(beadsDir, "myrig"); err != nil {
+		t.Fatalf("EnsureConfigYAML: %v", err)
+	}
+
+	// config.json should exist with correct content
+	data, err := os.ReadFile(filepath.Join(beadsDir, "config.json"))
+	if err != nil {
+		t.Fatalf("read config.json: %v", err)
+	}
+	var cfg beadsConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parse config.json: %v", err)
+	}
+	if cfg.Prefix != "myrig" {
+		t.Errorf("prefix = %q, want %q", cfg.Prefix, "myrig")
+	}
+	if cfg.IssuePrefix != "myrig" {
+		t.Errorf("issue-prefix = %q, want %q", cfg.IssuePrefix, "myrig")
+	}
+
+	// Legacy config.yaml should also exist for backward compat with bd
+	yamlData, err := os.ReadFile(filepath.Join(beadsDir, "config.yaml"))
+	if err != nil {
+		t.Fatalf("read config.yaml: %v", err)
+	}
+	if got := string(yamlData); got != "prefix: myrig\nissue-prefix: myrig\n" {
+		t.Errorf("config.yaml = %q, want prefix+issue-prefix lines", got)
+	}
+}
+
+func TestReadConfig_PrefersJSON(t *testing.T) {
+	beadsDir := t.TempDir()
+	// Write both JSON and YAML with different values
+	os.WriteFile(filepath.Join(beadsDir, "config.json"), []byte(`{"prefix":"fromjson","issue-prefix":"fromjson"}`), 0644)
+	os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte("prefix: fromyaml\nissue-prefix: fromyaml\n"), 0644)
+
+	cfg, found := readConfig(beadsDir)
+	if !found {
+		t.Fatal("readConfig found no config")
+	}
+	if cfg.Prefix != "fromjson" {
+		t.Errorf("prefix = %q, want %q (should prefer JSON)", cfg.Prefix, "fromjson")
+	}
+}
+
+func TestReadConfig_FallsBackToYAML(t *testing.T) {
+	beadsDir := t.TempDir()
+	// Only legacy YAML
+	os.WriteFile(filepath.Join(beadsDir, "config.yaml"), []byte("prefix: fromyaml\nissue-prefix: fromyaml\n"), 0644)
+
+	cfg, found := readConfig(beadsDir)
+	if !found {
+		t.Fatal("readConfig found no config")
+	}
+	if cfg.Prefix != "fromyaml" {
+		t.Errorf("prefix = %q, want %q", cfg.Prefix, "fromyaml")
+	}
+}
+
 func TestEnsureConfigYAMLFromMetadataIfMissing_UsesMetadataPrefix(t *testing.T) {
 	beadsDir := t.TempDir()
 	metadata := `{"backend":"dolt","dolt_mode":"server","dolt_database":"hq","issue_prefix":"foo"}`
@@ -39,16 +123,17 @@ func TestEnsureConfigYAMLFromMetadataIfMissing_UsesMetadataPrefix(t *testing.T) 
 		t.Fatalf("EnsureConfigYAMLFromMetadataIfMissing: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(beadsDir, "config.yaml"))
+	// Check config.json
+	data, err := os.ReadFile(filepath.Join(beadsDir, "config.json"))
 	if err != nil {
-		t.Fatalf("read config.yaml: %v", err)
+		t.Fatalf("read config.json: %v", err)
 	}
-	got := string(data)
-	if !strings.Contains(got, "prefix: foo\n") {
-		t.Fatalf("config.yaml missing metadata prefix: %q", got)
+	var cfg beadsConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parse config.json: %v", err)
 	}
-	if !strings.Contains(got, "issue-prefix: foo\n") {
-		t.Fatalf("config.yaml missing metadata issue-prefix: %q", got)
+	if cfg.Prefix != "foo" {
+		t.Errorf("prefix = %q, want %q", cfg.Prefix, "foo")
 	}
 }
 
@@ -89,15 +174,18 @@ func TestEnsureConfigYAMLFromMetadataIfMissing_StripsLegacyBeadsPrefixFromDoltDa
 		t.Fatalf("EnsureConfigYAMLFromMetadataIfMissing: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(beadsDir, "config.yaml"))
+	data, err := os.ReadFile(filepath.Join(beadsDir, "config.json"))
 	if err != nil {
-		t.Fatalf("read config.yaml: %v", err)
+		t.Fatalf("read config.json: %v", err)
 	}
-	got := string(data)
-	if !strings.Contains(got, "prefix: hq\n") {
-		t.Fatalf("config.yaml missing normalized prefix: %q", got)
+	var cfg beadsConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parse config.json: %v", err)
 	}
-	if !strings.Contains(got, "issue-prefix: hq\n") {
-		t.Fatalf("config.yaml missing normalized issue-prefix: %q", got)
+	if cfg.Prefix != "hq" {
+		t.Fatalf("prefix = %q, want %q", cfg.Prefix, "hq")
+	}
+	if cfg.IssuePrefix != "hq" {
+		t.Fatalf("issue-prefix = %q, want %q", cfg.IssuePrefix, "hq")
 	}
 }

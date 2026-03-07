@@ -108,7 +108,7 @@ func resolveBeadsDirWithDepth(beadsDir string, maxDepth int) string {
 }
 
 // cleanBeadsRuntimeFiles removes gitignored runtime files from a .beads directory
-// while preserving tracked files (formulas/, README.md, config.yaml, .gitignore).
+// while preserving tracked files (formulas/, README.md, config.json, config.yaml, .gitignore).
 // This is safe to call even if the directory doesn't exist.
 func cleanBeadsRuntimeFiles(beadsDir string) error {
 	if _, err := os.Stat(beadsDir); os.IsNotExist(err) {

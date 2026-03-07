@@ -357,7 +357,7 @@ func ensureDatabaseInitialized(beadsDir string) error {
 // detectPrefix determines the beads prefix for a directory.
 // Resolution order:
 //  1. Town-level config: FindTownRoot → config.GetRigPrefix (authoritative source from rigs.json)
-//  2. Local config.yaml: issue-prefix or prefix field
+//  2. Local config.json (or legacy config.yaml): issue-prefix or prefix field
 //  3. Default: "gt"
 //
 // All candidates are validated against prefixRe before use.
@@ -380,28 +380,16 @@ func detectPrefix(beadsDir string) string {
 		}
 	}
 
-	// 2. Fallback: read from config.yaml.
+	// 2. Fallback: read from config.json (or legacy config.yaml).
 	// NOTE: Inside towns, this is typically unreachable because GetRigPrefix
 	// always returns at least "gt" (the default) when a rig isn't found in
 	// rigs.json. This fallback is primarily for standalone rigs outside towns.
-	configPath := filepath.Join(beadsDir, "config.yaml")
-	if data, err := os.ReadFile(configPath); err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			line = strings.TrimSpace(line)
-			for _, key := range []string{"issue-prefix:", "prefix:"} {
-				if strings.HasPrefix(line, key) {
-					parts := strings.SplitN(line, ":", 2)
-					if len(parts) == 2 {
-						candidate := strings.TrimSpace(parts[1])
-						// Strip quotes first, then trailing dash — matches
-						// detectBeadsPrefixFromConfig in rig/manager.go.
-						candidate = stripYAMLQuotes(candidate)
-						candidate = strings.TrimSuffix(candidate, "-")
-						if candidate != "" && prefixRe.MatchString(candidate) {
-							return candidate
-						}
-					}
-				}
+	if cfg, found := readConfig(beadsDir); found {
+		// Prefer issue-prefix, fall back to prefix
+		for _, candidate := range []string{cfg.IssuePrefix, cfg.Prefix} {
+			candidate = strings.TrimSuffix(candidate, "-")
+			if candidate != "" && prefixRe.MatchString(candidate) {
+				return candidate
 			}
 		}
 	}
