@@ -514,9 +514,9 @@ func TestDetectPrefix(t *testing.T) {
 		}
 	})
 
-	t.Run("routed path falls back to default", func(t *testing.T) {
+	t.Run("routed path falls back to default without config.json", func(t *testing.T) {
 		// Routed beads path: mayor/rig/.beads — filepath.Base(filepath.Dir)
-		// yields "rig", not the actual rig name. Should fall back to "gt".
+		// yields "rig", not the actual rig name. Without config.json, falls to "gt".
 		townDir := t.TempDir()
 		mayorDir := filepath.Join(townDir, "mayor")
 		os.MkdirAll(mayorDir, 0755)
@@ -528,9 +528,48 @@ func TestDetectPrefix(t *testing.T) {
 		os.MkdirAll(beadsDir, 0755)
 
 		got := detectPrefix(beadsDir)
-		// "rig" won't be found in rigs.json → falls to "gt" default
+		// "rig" won't be found in rigs.json, no config.json → falls to "gt" default
 		if got != "gt" {
 			t.Errorf("detectPrefix() for routed path = %q, want %q", got, "gt")
+		}
+	})
+
+	t.Run("routed path detects prefix from rig config.json", func(t *testing.T) {
+		// Routed beads path with config.json at the rig root.
+		// The config.json walk-up should find it and return the correct prefix.
+		townDir := t.TempDir()
+		mayorDir := filepath.Join(townDir, "mayor")
+		os.MkdirAll(mayorDir, 0755)
+		os.WriteFile(filepath.Join(mayorDir, "town.json"), []byte("{}"), 0644)
+
+		rigDir := filepath.Join(townDir, "myrig")
+		os.MkdirAll(rigDir, 0755)
+		// Write rig config.json with beads prefix
+		rigConfig := `{"type":"rig","version":1,"name":"myrig","git_url":"git@example.com:user/repo.git","created_at":"2026-01-01T00:00:00Z","beads":{"prefix":"mr"}}`
+		os.WriteFile(filepath.Join(rigDir, "config.json"), []byte(rigConfig), 0644)
+
+		routedDir := filepath.Join(rigDir, "mayor", "rig")
+		beadsDir := filepath.Join(routedDir, ".beads")
+		os.MkdirAll(beadsDir, 0755)
+
+		got := detectPrefix(beadsDir)
+		if got != "mr" {
+			t.Errorf("detectPrefix() for routed path with config.json = %q, want %q", got, "mr")
+		}
+	})
+
+	t.Run("standalone rig detects prefix from config.json", func(t *testing.T) {
+		// Standalone rig (no town structure) with config.json.
+		rigDir := t.TempDir()
+		rigConfig := `{"type":"rig","version":1,"name":"standalone","git_url":"git@example.com:user/repo.git","created_at":"2026-01-01T00:00:00Z","beads":{"prefix":"sa"}}`
+		os.WriteFile(filepath.Join(rigDir, "config.json"), []byte(rigConfig), 0644)
+
+		beadsDir := filepath.Join(rigDir, ".beads")
+		os.MkdirAll(beadsDir, 0755)
+
+		got := detectPrefix(beadsDir)
+		if got != "sa" {
+			t.Errorf("detectPrefix() for standalone rig with config.json = %q, want %q", got, "sa")
 		}
 	})
 }

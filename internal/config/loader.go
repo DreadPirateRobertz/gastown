@@ -2289,6 +2289,50 @@ func GetRigPrefix(townRoot, rigName string) string {
 	return strings.TrimSuffix(prefix, "-")
 }
 
+// LookupRigPrefix returns the beads prefix for a rig from rigs.json.
+// Unlike GetRigPrefix, it returns a found boolean so callers can distinguish
+// "rig found with prefix" from "rig not found in registry".
+// When found is true, prefix is the configured value (or "gt" if none configured).
+func LookupRigPrefix(townRoot, rigName string) (prefix string, found bool) {
+	rigsConfigPath := filepath.Join(townRoot, "mayor", "rigs.json")
+	rigsConfig, err := LoadRigsConfig(rigsConfigPath)
+	if err != nil {
+		return "", false
+	}
+
+	entry, ok := rigsConfig.Rigs[rigName]
+	if !ok {
+		return "", false
+	}
+
+	if entry.BeadsConfig == nil || entry.BeadsConfig.Prefix == "" {
+		return "gt", true // found but no prefix configured
+	}
+
+	return strings.TrimSuffix(entry.BeadsConfig.Prefix, "-"), true
+}
+
+// GetRigPrefixFromConfigJSON walks up from startDir looking for a rig config.json
+// file and returns the beads prefix if found. This handles cases where the rig name
+// can't be derived from the directory structure (e.g., routed paths like mayor/rig/.beads).
+// Returns empty string if no rig config.json with a prefix is found.
+func GetRigPrefixFromConfigJSON(startDir string) string {
+	dir := startDir
+	for i := 0; i < 10; i++ { // limit traversal depth
+		configPath := filepath.Join(dir, "config.json")
+		cfg, err := LoadRigConfig(configPath)
+		if err == nil && cfg.Beads != nil && cfg.Beads.Prefix != "" {
+			return strings.TrimSuffix(cfg.Beads.Prefix, "-")
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break // reached filesystem root
+		}
+		dir = parent
+	}
+	return ""
+}
+
 // AllRigPrefixes returns a sorted list of all rig beads prefixes from rigs.json.
 // Trailing hyphens are stripped (e.g. "gt-" becomes "gt").
 // Returns nil on error (caller should handle the fallback).
