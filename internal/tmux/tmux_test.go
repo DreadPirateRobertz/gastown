@@ -1784,6 +1784,17 @@ func TestWaitForIdle_Timeout(t *testing.T) {
 	}
 }
 
+func TestIsInputEmpty_Unit(t *testing.T) {
+	t.Parallel()
+
+	// Test the logic by verifying IsInputEmpty returns false
+	// for a non-existent session (can't capture pane → false).
+	tm := NewTmux()
+	if tm.IsInputEmpty("nonexistent-session-abc123") {
+		t.Error("IsInputEmpty should return false for non-existent session")
+	}
+}
+
 func TestDefaultReadyPromptPrefix(t *testing.T) {
 	t.Parallel()
 	// Verify the constant is set correctly

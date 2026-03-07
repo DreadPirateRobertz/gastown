@@ -123,6 +123,12 @@ const ifFreshMaxAge = 60 * time.Second
 // This is a var (not const) so tests can override it to avoid 15s waits.
 var waitIdleTimeout = 15 * time.Second
 
+// postQueueSettleDelay is how long to wait after enqueueing before checking
+// if the agent became idle. This catches the race where an agent finishes
+// processing (becomes idle) between WaitForIdle's timeout and the queue write.
+// Var so tests can override.
+var postQueueSettleDelay = 300 * time.Millisecond
+
 // deliverNudge routes a nudge based on the --mode flag.
 // For "immediate" mode: sends directly via tmux (current behavior).
 // For "queue" mode: writes to the nudge queue for cooperative delivery.
@@ -155,15 +161,23 @@ func deliverNudge(t *tmux.Tmux, sessionName, message, sender string) error {
 		// Try to wait for idle
 		err := t.WaitForIdle(sessionName, waitIdleTimeout)
 		if err == nil {
-			// Agent is idle — safe to deliver directly
-			return t.NudgeSession(sessionName, prefixedMessage)
+			// Agent is idle — but verify the input field is actually empty
+			// before delivering. The user may have started typing between
+			// WaitForIdle's last poll and now, or a previous nudge may have
+			// left partial text in the input field.
+			if t.IsInputEmpty(sessionName) {
+				return t.NudgeSession(sessionName, prefixedMessage)
+			}
+			// Input field has content — queue instead of corrupting it.
+			// This is a soft fallback, not an error.
+			fmt.Fprintf(os.Stderr, "Warning: agent idle but input field not empty, queueing nudge\n")
 		}
 		// Terminal errors (session gone, no server) — propagate, don't queue.
 		// Queueing a nudge for a dead session means it will never be delivered.
 		if errors.Is(err, tmux.ErrSessionNotFound) || errors.Is(err, tmux.ErrNoServer) {
 			return fmt.Errorf("wait-idle: %w", err)
 		}
-		// Timeout (agent busy) — queue instead
+		// Timeout (agent busy) or input not empty — queue instead
 		if qErr := nudge.Enqueue(townRoot, sessionName, nudge.QueuedNudge{
 			Sender:   sender,
 			Message:  message,
@@ -172,6 +186,19 @@ func deliverNudge(t *tmux.Tmux, sessionName, message, sender string) error {
 			// Queue failed — fall back to immediate as last resort.
 			// Better to interrupt than lose the message entirely.
 			fmt.Fprintf(os.Stderr, "Warning: queue fallback failed (%v), delivering immediately\n", qErr)
+			return t.NudgeSession(sessionName, prefixedMessage)
+		}
+		// Post-queue idle recovery: the agent may have become idle between
+		// WaitForIdle's timeout and now (e.g., finished processing startup
+		// hooks while we were writing the queue entry). An idle agent will
+		// never drain its queue autonomously — the UserPromptSubmit hook
+		// only fires on input, so queued nudges for idle agents are lost.
+		// Brief settle, then check: if idle with empty input, drain queue
+		// and deliver directly.
+		time.Sleep(postQueueSettleDelay)
+		if t.IsInputEmpty(sessionName) {
+			// Drain the queue to prevent double delivery, then deliver directly.
+			_, _ = nudge.Drain(townRoot, sessionName)
 			return t.NudgeSession(sessionName, prefixedMessage)
 		}
 		return nil

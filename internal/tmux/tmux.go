@@ -2484,6 +2484,49 @@ func (t *Tmux) IsIdle(session string) bool {
 	return false
 }
 
+// IsInputEmpty checks whether the agent is idle AND the input field is empty
+// (no partially-typed user text). Returns true only if the prompt line shows
+// the prompt prefix with nothing after it. This is stricter than IsIdle, which
+// only checks that no tool call is running.
+//
+// Used by wait-idle nudge delivery to avoid corrupting user input.
+func (t *Tmux) IsInputEmpty(session string) bool {
+	lines, err := t.CapturePaneLines(session, 5)
+	if err != nil {
+		return false
+	}
+
+	// First verify the agent is not actively working (status bar check).
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if (strings.Contains(trimmed, "⏵⏵") || strings.Contains(trimmed, "\u23F5\u23F5")) &&
+			strings.Contains(trimmed, "esc to interrupt") {
+			return false
+		}
+	}
+
+	// Find the prompt line and check if it has content beyond the prompt prefix.
+	promptPrefix := DefaultReadyPromptPrefix
+	prefix := strings.TrimSpace(promptPrefix)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		normalizedLine := strings.ReplaceAll(trimmed, "\u00a0", " ")
+		normalizedPrefix := strings.ReplaceAll(promptPrefix, "\u00a0", " ")
+		// Prompt with no input: line is exactly the prompt prefix (e.g., "❯")
+		if normalizedLine == strings.TrimSpace(normalizedPrefix) || normalizedLine == prefix {
+			return true
+		}
+		// Prompt with input: line starts with prefix but has more content
+		if strings.HasPrefix(normalizedLine, normalizedPrefix) {
+			return false // prompt found but has content after it
+		}
+	}
+	return false
+}
+
 // GetSessionInfo returns detailed information about a session.
 func (t *Tmux) GetSessionInfo(name string) (*SessionInfo, error) {
 	format := "#{session_name}|#{session_windows}|#{session_created}|#{session_attached}|#{session_activity}|#{session_last_attached}"
