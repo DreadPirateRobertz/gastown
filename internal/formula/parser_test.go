@@ -517,3 +517,169 @@ description = "No agent override"
 		t.Errorf("Legs[0].Agent = %q, want empty", f.Legs[0].Agent)
 	}
 }
+
+func TestParse_WorkflowWithModelConstraints(t *testing.T) {
+	data := []byte(`
+formula = "model-aware"
+type = "workflow"
+version = 1
+
+[[steps]]
+id = "quick-scan"
+title = "Quick scan"
+description = "Fast scan with local model"
+model = "auto"
+max_cost = 0.001
+access_type = "local"
+
+[[steps]]
+id = "deep-work"
+title = "Deep work"
+description = "Quality work"
+needs = ["quick-scan"]
+model = "auto"
+min_mmlu = 85
+min_swe = 50
+
+[[steps]]
+id = "exact-model"
+title = "Exact model"
+description = "Specific model"
+needs = ["quick-scan"]
+model = "claude-sonnet-4-6"
+requires = ["vision"]
+`)
+
+	f, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	if len(f.Steps) != 3 {
+		t.Fatalf("expected 3 steps, got %d", len(f.Steps))
+	}
+
+	// Check quick-scan constraints.
+	s := f.GetStep("quick-scan")
+	if s.Model != "auto" {
+		t.Errorf("quick-scan.Model = %q, want auto", s.Model)
+	}
+	if s.MaxCost != 0.001 {
+		t.Errorf("quick-scan.MaxCost = %f, want 0.001", s.MaxCost)
+	}
+	if s.AccessType != "local" {
+		t.Errorf("quick-scan.AccessType = %q, want local", s.AccessType)
+	}
+
+	// Check deep-work constraints.
+	s = f.GetStep("deep-work")
+	if s.MinMMLU != 85 {
+		t.Errorf("deep-work.MinMMLU = %f, want 85", s.MinMMLU)
+	}
+	if s.MinSWE != 50 {
+		t.Errorf("deep-work.MinSWE = %f, want 50", s.MinSWE)
+	}
+
+	// Check exact-model constraints.
+	s = f.GetStep("exact-model")
+	if s.Model != "claude-sonnet-4-6" {
+		t.Errorf("exact-model.Model = %q, want claude-sonnet-4-6", s.Model)
+	}
+	if len(s.Requires) != 1 || s.Requires[0] != "vision" {
+		t.Errorf("exact-model.Requires = %v, want [vision]", s.Requires)
+	}
+}
+
+func TestParse_ModelAndProviderMutuallyExclusive(t *testing.T) {
+	data := []byte(`
+formula = "bad-formula"
+type = "workflow"
+version = 1
+
+[[steps]]
+id = "bad-step"
+title = "Bad step"
+model = "claude-sonnet-4-6"
+provider = "anthropic"
+`)
+
+	_, err := Parse(data)
+	if err == nil {
+		t.Error("expected error when model and provider are both set")
+	}
+}
+
+func TestParse_InvalidAccessType(t *testing.T) {
+	data := []byte(`
+formula = "bad-formula"
+type = "workflow"
+version = 1
+
+[[steps]]
+id = "bad-step"
+title = "Bad step"
+access_type = "invalid"
+`)
+
+	_, err := Parse(data)
+	if err == nil {
+		t.Error("expected error for invalid access_type")
+	}
+}
+
+func TestParse_InvalidCapability(t *testing.T) {
+	data := []byte(`
+formula = "bad-formula"
+type = "workflow"
+version = 1
+
+[[steps]]
+id = "bad-step"
+title = "Bad step"
+requires = ["teleportation"]
+`)
+
+	_, err := Parse(data)
+	if err == nil {
+		t.Error("expected error for unknown capability")
+	}
+}
+
+func TestParse_InvalidMMLURange(t *testing.T) {
+	data := []byte(`
+formula = "bad-formula"
+type = "workflow"
+version = 1
+
+[[steps]]
+id = "bad-step"
+title = "Bad step"
+min_mmlu = 150
+`)
+
+	_, err := Parse(data)
+	if err == nil {
+		t.Error("expected error for MMLU > 100")
+	}
+}
+
+func TestParse_NoConstraintsBackwardCompatible(t *testing.T) {
+	data := []byte(`
+formula = "simple"
+type = "workflow"
+version = 1
+
+[[steps]]
+id = "step1"
+title = "Simple step"
+description = "No constraints"
+`)
+
+	f, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	s := f.GetStep("step1")
+	if s.Model != "" || s.Provider != "" || s.AccessType != "" {
+		t.Error("expected empty constraint fields for backward compatibility")
+	}
+}
