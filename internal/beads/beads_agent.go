@@ -430,15 +430,22 @@ func (b *Beads) UpdateAgentState(id string, state string) (retErr error) {
 	return nil
 }
 
-// SetHookBead and ClearHookBead removed (hq-l6mm5).
-// Hook slot on agent beads is no longer maintained. Work bead status=hooked
-// and assignee=<agent> is the authoritative source for hook tracking.
+// ClearAgentHookBead clears the hook_bead field in an agent bead's description.
+// Called by gt unsling to remove stale references (gt-ufs5). The hook_bead
+// description field is still written at spawn time by FormatAgentDescription
+// for backward compat with display readers (daemon crash detection, manager
+// loadFromBeads fallback). Unsling must clear it to prevent stale reads.
+func (b *Beads) ClearAgentHookBead(id string) error {
+	empty := ""
+	return b.UpdateAgentDescriptionFields(id, AgentFieldUpdates{HookBead: &empty})
+}
 
 // AgentFieldUpdates specifies which agent description fields to update.
 // Only non-nil fields are modified; nil fields are left unchanged.
 // This allows multiple fields to be updated in a single read-modify-write
 // cycle, avoiding races where concurrent callers overwrite each other's changes.
 type AgentFieldUpdates struct {
+	HookBead          *string // Clear/set hook_bead (gt-ufs5: unsling must clear stale refs)
 	CleanupStatus     *string
 	ActiveMR          *string
 	NotificationLevel *string
@@ -480,6 +487,9 @@ func (b *Beads) UpdateAgentDescriptionFields(id string, updates AgentFieldUpdate
 
 	fields := ParseAgentFields(issue.Description)
 
+	if updates.HookBead != nil {
+		fields.HookBead = *updates.HookBead
+	}
 	if updates.CleanupStatus != nil {
 		fields.CleanupStatus = *updates.CleanupStatus
 	}
