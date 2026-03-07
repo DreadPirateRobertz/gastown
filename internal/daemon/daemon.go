@@ -665,6 +665,14 @@ func (d *Daemon) heartbeat(state *State) {
 		d.checkPolecatSessionHealth()
 	}
 
+	// 12b. Rate limit recovery: detect usage-limited sessions and auto-recover
+	// when the reset time passes. Scans tmux panes for rate limit messages,
+	// records reset times, and kills stuck sessions after the limit lifts.
+	// The daemon's normal patrols restart everything on the next heartbeat.
+	if IsPatrolEnabled(d.patrolConfig, "rate_limit_recovery") {
+		d.checkRateLimitRecovery()
+	}
+
 	// 13. Clean up orphaned claude subagent processes (memory leak prevention)
 	// These are Task tool subagents that didn't clean up after completion.
 	// This is a safety net - Deacon patrol also does this more frequently.
