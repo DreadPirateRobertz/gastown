@@ -30,12 +30,16 @@ var (
 // bdAllowStale caches whether the installed bd supports --allow-stale.
 // Detected once at first use via `bd --allow-stale version`.
 var (
-	bdAllowStaleOnce   sync.Once
-	bdAllowStaleResult bool
+	bdAllowStaleOnce     sync.Once
+	bdAllowStaleResult   bool
+	bdAllowStaleOverride *bool // non-nil = test override, bypasses sync.Once
 )
 
 // BdSupportsAllowStale returns true if the installed bd binary accepts --allow-stale.
 func BdSupportsAllowStale() bool {
+	if v := bdAllowStaleOverride; v != nil {
+		return *v
+	}
 	bdAllowStaleOnce.Do(func() {
 		cmd := exec.Command("bd", "--allow-stale", "version") //nolint:gosec // G204: bd is a trusted internal tool
 		if err := cmd.Run(); err == nil {
@@ -43,6 +47,14 @@ func BdSupportsAllowStale() bool {
 		}
 	})
 	return bdAllowStaleResult
+}
+
+// SetBdAllowStaleForTest overrides the --allow-stale detection result.
+// Returns a cleanup function that restores the original behavior.
+func SetBdAllowStaleForTest(supported bool) func() {
+	old := bdAllowStaleOverride
+	bdAllowStaleOverride = &supported
+	return func() { bdAllowStaleOverride = old }
 }
 
 // MaybePrependAllowStale prepends --allow-stale to args if bd supports it.

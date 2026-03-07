@@ -871,6 +871,10 @@ exit /b 0
 func TestVerifyBeadExistsAllowStale(t *testing.T) {
 	townRoot := t.TempDir()
 
+	// Override the cached --allow-stale detection so the stub bd's flag is respected.
+	cleanup := beads.SetBdAllowStaleForTest(true)
+	t.Cleanup(cleanup)
+
 	// Create minimal workspace structure
 	if err := os.MkdirAll(filepath.Join(townRoot, "mayor", "rig"), 0755); err != nil {
 		t.Fatalf("mkdir mayor/rig: %v", err)
@@ -940,6 +944,10 @@ exit /b 1
 // This is an integration test for the gtl-ncq bug.
 func TestSlingWithAllowStale(t *testing.T) {
 	townRoot := t.TempDir()
+
+	// Override the cached --allow-stale detection so the stub bd's flag is respected.
+	cleanup := beads.SetBdAllowStaleForTest(true)
+	t.Cleanup(cleanup)
 
 	// Create minimal workspace structure
 	if err := os.MkdirAll(filepath.Join(townRoot, "mayor", "rig"), 0755); err != nil {
