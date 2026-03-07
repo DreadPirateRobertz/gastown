@@ -982,9 +982,10 @@ func hookBeadWithRetry(beadID, targetAgent, hookDir string) error {
 
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// No WithAutoCommit — honor sling-level BD_DOLT_AUTO_COMMIT=off (gt-sbqu0).
+		// Verification read uses --allow-stale to see uncommitted writes.
 		err := BdCmd("update", beadID, "--status=hooked", "--assignee="+targetAgent).
 			Dir(hookDir).
-			WithAutoCommit().
 			Run()
 		if err != nil {
 			lastErr = err
