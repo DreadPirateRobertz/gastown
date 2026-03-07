@@ -71,8 +71,9 @@ func ClassifySchemaChange(local, upstream string) (SchemaChangeKind, error) {
 
 // readDoltSchemaVersion reads schema_version from the _meta table of a local
 // dolt fork. asOf specifies the branch/ref (e.g. "HEAD" or "upstream/main").
-// Returns ("", nil) when the _meta table or schema_version row does not exist.
-func readDoltSchemaVersion(doltPath, forkDir, asOf string) (string, error) {
+// Returns "" when the _meta table or schema_version row does not exist —
+// callers treat this as a pre-versioned fork and skip schema checks.
+func readDoltSchemaVersion(doltPath, forkDir, asOf string) string {
 	var query string
 	if asOf == "" || asOf == "HEAD" {
 		query = "SELECT value FROM _meta WHERE `key` = 'schema_version';"
@@ -88,16 +89,15 @@ func readDoltSchemaVersion(doltPath, forkDir, asOf string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		// _meta may not exist on older forks — treat as unknown, not fatal.
-		return "", nil
+		return ""
 	}
 
 	// Output format: "value\n<version>\n"
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	if len(lines) < 2 {
-		return "", nil
+		return ""
 	}
-	version := strings.TrimSpace(lines[1])
-	return version, nil
+	return strings.TrimSpace(lines[1])
 }
 
 // SchemaEvolutionResult captures the outcome of a schema version check so the
@@ -119,13 +119,13 @@ type SchemaEvolutionResult struct {
 // or schema_version row (pre-versioned fork) — the pull proceeds without
 // interruption.
 func checkSchemaEvolution(doltPath, forkDir string, upgrade bool) (SchemaEvolutionResult, error) {
-	localVer, err := readDoltSchemaVersion(doltPath, forkDir, "HEAD")
-	if err != nil || localVer == "" {
+	localVer := readDoltSchemaVersion(doltPath, forkDir, "HEAD")
+	if localVer == "" {
 		return SchemaEvolutionResult{}, nil // pre-versioned fork — skip check
 	}
 
-	upstreamVer, err := readDoltSchemaVersion(doltPath, forkDir, "upstream/main")
-	if err != nil || upstreamVer == "" {
+	upstreamVer := readDoltSchemaVersion(doltPath, forkDir, "upstream/main")
+	if upstreamVer == "" {
 		return SchemaEvolutionResult{}, nil // upstream has no version info — skip check
 	}
 
@@ -190,10 +190,7 @@ func verifyPostMergeSchema(doltPath, forkDir, expectedVer string) error {
 		return nil // no version expectation — nothing to verify
 	}
 
-	actualVer, err := readDoltSchemaVersion(doltPath, forkDir, "HEAD")
-	if err != nil {
-		return nil // can't read — non-fatal, might be pre-versioned
-	}
+	actualVer := readDoltSchemaVersion(doltPath, forkDir, "HEAD")
 
 	if actualVer == "" {
 		// _meta row disappeared during merge — warn but don't block
