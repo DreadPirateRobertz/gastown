@@ -129,6 +129,7 @@ type PatrolsConfig struct {
 	CompactorDog           *CompactorDogConfig            `json:"compactor_dog,omitempty"`
 	ScheduledMaintenance   *ScheduledMaintenanceConfig    `json:"scheduled_maintenance,omitempty"`
 	RestartTracker         *RestartTrackerConfig          `json:"restart_tracker,omitempty"`
+	RateLimitRecovery      *PatrolConfig                  `json:"rate_limit_recovery,omitempty"`
 }
 
 // DoltRemotesConfig holds configuration for the dolt_remotes patrol.
@@ -313,6 +314,10 @@ func IsPatrolEnabled(config *DaemonPatrolConfig, patrol string) bool {
 	case "polecat_health":
 		if config.Patrols.PolecatHealth != nil {
 			return config.Patrols.PolecatHealth.Enabled
+		}
+	case "rate_limit_recovery":
+		if config.Patrols.RateLimitRecovery != nil {
+			return config.Patrols.RateLimitRecovery.Enabled
 		}
 	}
 	return true // Default: enabled
