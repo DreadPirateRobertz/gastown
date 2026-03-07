@@ -214,7 +214,13 @@ func runUnslingWith(cmd *cobra.Command, args []string, dryRun, force bool) error
 		return nil
 	}
 
-	// No ClearHookBead call needed — agent bead hook slot is no longer maintained (hq-l6mm5).
+	// Clear agent bead's hook_bead description field to prevent stale references (gt-ufs5).
+	// The field is still written at spawn time for backward compat with display readers
+	// (daemon crash detection, manager loadFromBeads fallback). Without clearing it here,
+	// those readers see a stale hook_bead after unsling.
+	if err := b.ClearAgentHookBead(agentBeadID); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: couldn't clear hook_bead on agent %s: %v\n", agentBeadID, err)
+	}
 
 	// Update hooked bead status from "hooked" back to "open".
 	// Previously, only the agent's hook slot was cleared but the bead itself stayed
