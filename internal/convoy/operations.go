@@ -187,10 +187,11 @@ var blockingDepTypes = map[string]bool{
 // that the code was actually integrated. This prevents dispatching work
 // against un-merged code (see #1893).
 //
-// Note: this uses the hq store's dependency metadata snapshot. For cross-rig
-// issues, the blocking issue's status may be stale (see Discovery #11 in
-// convoy-lifecycle.md). This is a known limitation.
-func isIssueBlocked(ctx context.Context, store beadsdk.Storage, issueID string) bool {
+// Cross-rig awareness: when townRoot is non-empty, blocking issues that aren't
+// found in the local store are refreshed via fetchCrossRigBeadStatus. This
+// prevents stale dependency metadata snapshots from incorrectly blocking
+// convoy feeding when a cross-rig blocker has already closed.
+func isIssueBlocked(ctx context.Context, store beadsdk.Storage, issueID, townRoot string) bool {
 	if store == nil {
 		return false // fail-open: no store means we can't check deps
 	}
@@ -199,20 +200,81 @@ func isIssueBlocked(ctx context.Context, store beadsdk.Storage, issueID string) 
 		return false // On error, assume not blocked (fail-open)
 	}
 
+	// Collect blocking dependencies for cross-rig refresh
+	type blockingDep struct {
+		id          string
+		depType     string
+		status      string
+		closeReason string
+	}
+	var blockers []blockingDep
 	for _, d := range deps {
 		depType := string(d.DependencyType)
 		if !blockingDepTypes[depType] {
 			continue
 		}
-		status := string(d.Status)
-		if status == "tombstone" {
+		blockers = append(blockers, blockingDep{
+			id:          d.ID,
+			depType:     depType,
+			status:      string(d.Status),
+			closeReason: d.CloseReason,
+		})
+	}
+
+	if len(blockers) == 0 {
+		return false
+	}
+
+	// Refresh blocker statuses for cross-rig accuracy.
+	// The hq store's dependency metadata JOIN may have stale status for
+	// issues that live in other rigs.
+	if townRoot != "" {
+		var blockerIDs []string
+		for _, b := range blockers {
+			blockerIDs = append(blockerIDs, b.id)
+		}
+
+		// Try local store first
+		freshIssues, _ := store.GetIssuesByIDs(ctx, blockerIDs)
+		freshMap := make(map[string]*beadsdk.Issue)
+		for _, iss := range freshIssues {
+			if iss != nil {
+				freshMap[iss.ID] = iss
+			}
+		}
+
+		// Cross-rig fallback for missing IDs
+		var missingIDs []string
+		for _, id := range blockerIDs {
+			if _, ok := freshMap[id]; !ok {
+				missingIDs = append(missingIDs, id)
+			}
+		}
+		if len(missingIDs) > 0 {
+			crossRigFresh := fetchCrossRigBeadStatus(townRoot, missingIDs)
+			for id, fresh := range crossRigFresh {
+				freshMap[id] = fresh
+			}
+		}
+
+		// Update blocker statuses with fresh data
+		for i, b := range blockers {
+			if fresh, ok := freshMap[b.id]; ok {
+				blockers[i].status = string(fresh.Status)
+				blockers[i].closeReason = fresh.CloseReason
+			}
+		}
+	}
+
+	for _, b := range blockers {
+		if b.status == "tombstone" {
 			continue // always unblocked
 		}
-		if status != "closed" {
+		if b.status != "closed" {
 			return true // not closed = blocked
 		}
 		// For merge-blocks: "closed" alone is not enough — need merge confirmation
-		if depType == "merge-blocks" && !strings.HasPrefix(d.CloseReason, "Merged in ") {
+		if b.depType == "merge-blocks" && !strings.HasPrefix(b.closeReason, "Merged in ") {
 			return true // closed but not merged = still blocked
 		}
 	}
@@ -258,7 +320,7 @@ func feedNextReadyIssue(ctx context.Context, store beadsdk.Storage, townRoot, co
 		// Check blocking dependencies: blocks and conditional-blocks with
 		// non-closed targets prevent dispatch. parent-child is NOT treated
 		// as blocking (consistent with molecule step behavior).
-		if isIssueBlocked(ctx, store, issue.ID) {
+		if isIssueBlocked(ctx, store, issue.ID, townRoot) {
 			logger("%s: convoy %s: %s is blocked, skipping", caller, convoyID, issue.ID)
 			continue
 		}
@@ -427,22 +489,24 @@ func fetchCrossRigBeadStatus(townRoot string, ids []string) map[string]*beadsdk.
 		}
 
 		var items []struct {
-			ID       string `json:"id"`
-			Status   string `json:"status"`
-			Assignee string `json:"assignee"`
-			Priority int    `json:"priority"`
-			Type     string `json:"issue_type"`
+			ID          string `json:"id"`
+			Status      string `json:"status"`
+			Assignee    string `json:"assignee"`
+			Priority    int    `json:"priority"`
+			Type        string `json:"issue_type"`
+			CloseReason string `json:"close_reason"`
 		}
 		if err := json.Unmarshal(out, &items); err != nil {
 			continue
 		}
 		for _, item := range items {
 			result[item.ID] = &beadsdk.Issue{
-				ID:        item.ID,
-				Status:    beadsdk.Status(item.Status),
-				Assignee:  item.Assignee,
-				Priority:  item.Priority,
-				IssueType: beadsdk.IssueType(item.Type),
+				ID:          item.ID,
+				Status:      beadsdk.Status(item.Status),
+				Assignee:    item.Assignee,
+				Priority:    item.Priority,
+				IssueType:   beadsdk.IssueType(item.Type),
+				CloseReason: item.CloseReason,
 			}
 		}
 	}

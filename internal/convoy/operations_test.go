@@ -72,7 +72,7 @@ func TestIsSlingableType(t *testing.T) {
 func TestIsIssueBlocked_NoStore(t *testing.T) {
 	// isIssueBlocked with nil store should fail-open (return false, not panic).
 	// This covers the "store unavailable" failure mode (F-17).
-	result := isIssueBlocked(context.Background(), nil, "test-any-id")
+	result := isIssueBlocked(context.Background(), nil, "test-any-id", "")
 	if result {
 		t.Error("isIssueBlocked should fail-open (return false) with nil store")
 	}
@@ -216,7 +216,7 @@ func TestIsIssueBlocked_NoDeps(t *testing.T) {
 		t.Fatalf("CreateIssue: %v", err)
 	}
 
-	if isIssueBlocked(ctx, store, issue.ID) {
+	if isIssueBlocked(ctx, store, issue.ID, "") {
 		t.Error("isIssueBlocked should return false for issue with no dependencies")
 	}
 }
@@ -274,7 +274,7 @@ func TestIsIssueBlocked_BlockedByOpenBlocker(t *testing.T) {
 		t.Fatal("expected at least 1 dependency to be created")
 	}
 
-	result := isIssueBlocked(ctx, store, blocked.ID)
+	result := isIssueBlocked(ctx, store, blocked.ID, "")
 
 	// GetDependenciesWithMetadata may not work in embedded Dolt mode
 	// (nested query limitation). If it fails, isIssueBlocked returns false
@@ -335,7 +335,7 @@ func TestIsIssueBlocked_NotBlockedByClosedBlocker(t *testing.T) {
 
 	// Even if GetDependenciesWithMetadata works, the blocker is closed so
 	// isIssueBlocked should return false.
-	if isIssueBlocked(ctx, store, blocked.ID) {
+	if isIssueBlocked(ctx, store, blocked.ID, "") {
 		t.Error("isIssueBlocked should return false when the only blocker is closed")
 	}
 }
@@ -385,7 +385,7 @@ func TestIsIssueBlocked_ParentChildDoesNotBlock(t *testing.T) {
 	}
 
 	// parent-child deps should NOT block dispatch
-	if isIssueBlocked(ctx, store, child.ID) {
+	if isIssueBlocked(ctx, store, child.ID, "") {
 		t.Error("isIssueBlocked should return false for parent-child dependency (not a blocking type)")
 	}
 }
@@ -397,7 +397,7 @@ func TestIsIssueBlocked_FailOpenOnNonexistentIssue(t *testing.T) {
 	ctx := context.Background()
 
 	// Querying deps for a nonexistent issue should fail-open (return false)
-	if isIssueBlocked(ctx, store, "test-nonexistent-issue") {
+	if isIssueBlocked(ctx, store, "test-nonexistent-issue", "") {
 		t.Error("isIssueBlocked should fail-open (return false) for nonexistent issue")
 	}
 }
@@ -451,7 +451,7 @@ func TestIsIssueBlocked_MergeBlocksStillBlockedWhenClosedWithoutMerge(t *testing
 		t.Fatalf("AddDependency: %v", err)
 	}
 
-	result := isIssueBlocked(ctx, store, blocked.ID)
+	result := isIssueBlocked(ctx, store, blocked.ID, "")
 
 	// Check if GetDependenciesWithMetadata works in embedded mode
 	if !result {
@@ -510,7 +510,7 @@ func TestIsIssueBlocked_MergeBlocksUnblockedWhenMerged(t *testing.T) {
 	}
 
 	// Blocker is closed with "Merged in mr-xyz" — should NOT be blocked
-	if isIssueBlocked(ctx, store, blocked.ID) {
+	if isIssueBlocked(ctx, store, blocked.ID, "") {
 		// Check if it's the embedded Dolt issue
 		_, metaErr := store.GetDependenciesWithMetadata(ctx, blocked.ID)
 		if metaErr != nil {
@@ -573,7 +573,7 @@ func TestIsIssueBlocked_MergeBlocksUnblockedOnTombstone(t *testing.T) {
 	}
 
 	// Tombstone always unblocks, regardless of dep type
-	if isIssueBlocked(ctx, store, blocked.ID) {
+	if isIssueBlocked(ctx, store, blocked.ID, "") {
 		_, metaErr := store.GetDependenciesWithMetadata(ctx, blocked.ID)
 		if metaErr != nil {
 			t.Skipf("GetDependenciesWithMetadata not supported in embedded mode: %v", metaErr)
