@@ -7,3 +7,4 @@
 {"author":"gastown/crew/deckard","created_at":"2026-03-01T04:49:23Z","id":7,"issue_id":"gt-l5js","text":"Already fixed in commit d16bd16 (sweep legacy -L gt socket sessions during gt down)."}
 {"author":"gastown/crew/deckard","created_at":"2026-03-01T04:49:36Z","id":8,"issue_id":"gt-veoe","text":"Test passes on latest main (5/5 subtests pass). Was fixed in prior commits."}
 {"author":"gastown/crew/deckard","created_at":"2026-03-01T04:49:44Z","id":9,"issue_id":"gt-6oio","text":"Plugin result bead, no action needed. Rebuild completed successfully."}
+{"author":"gastown/crew/zhora","created_at":"2026-03-07T16:54:07Z","id":10,"issue_id":"gt-y9hv","text":"Fix submitted as PR #18 to gastownhall/wasteland. Renamed stamp_count → assessment_count in profile API. Frontend now shows 'assessments' with tooltip instead of misleading 'stamps earned'. Scoreboard stamp_count unchanged."}
