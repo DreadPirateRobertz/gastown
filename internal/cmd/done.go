@@ -519,24 +519,37 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 			}
 			fmt.Printf("%s Branch pushed directly to %s\n", style.Bold.Render("✓"), defaultBranch)
 
-			// Close the base issue — no MR/refinery will close it
+			// Close the base issue — no MR/refinery will close it.
+			// Acceptance criteria gate: verify criteria are satisfied before
+			// allowing direct-merge closure. Without this, polecats can close
+			// beads by pushing to main without completing required work. (#2416)
 			if issueID != "" {
 				directBd := beads.New(cwd)
-				closeReason := fmt.Sprintf("Direct merge to %s (convoy strategy)", defaultBranch)
-				var closeErr error
-				for attempt := 1; attempt <= 3; attempt++ {
-					closeErr = directBd.ForceCloseWithReason(closeReason, issueID)
-					if closeErr == nil {
-						fmt.Printf("%s Issue %s closed (direct merge)\n", style.Bold.Render("✓"), issueID)
-						break
-					}
-					if attempt < 3 {
-						style.PrintWarning("close attempt %d/3 failed: %v (retrying in %ds)", attempt, closeErr, attempt*2)
-						time.Sleep(time.Duration(attempt*2) * time.Second)
+				skipDirectClose := false
+				if issue, showErr := directBd.Show(issueID); showErr == nil {
+					if unchecked := beads.HasUncheckedCriteria(issue); unchecked > 0 {
+						style.PrintWarning("issue %s has %d unchecked acceptance criteria — skipping close", issueID, unchecked)
+						fmt.Printf("  The bead will remain open for witness/mayor review.\n")
+						skipDirectClose = true
 					}
 				}
-				if closeErr != nil {
-					style.PrintWarning("could not close issue %s after 3 attempts: %v", issueID, closeErr)
+				if !skipDirectClose {
+					closeReason := fmt.Sprintf("Direct merge to %s (convoy strategy)", defaultBranch)
+					var closeErr error
+					for attempt := 1; attempt <= 3; attempt++ {
+						closeErr = directBd.ForceCloseWithReason(closeReason, issueID)
+						if closeErr == nil {
+							fmt.Printf("%s Issue %s closed (direct merge)\n", style.Bold.Render("✓"), issueID)
+							break
+						}
+						if attempt < 3 {
+							style.PrintWarning("close attempt %d/3 failed: %v (retrying in %ds)", attempt, closeErr, attempt*2)
+							time.Sleep(time.Duration(attempt*2) * time.Second)
+						}
+					}
+					if closeErr != nil {
+						style.PrintWarning("could not close issue %s after 3 attempts: %v", issueID, closeErr)
+					}
 				}
 			}
 
@@ -714,22 +727,33 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 				fmt.Printf("%s Branch pushed directly to %s\n", style.Bold.Render("✓"), defaultBranch)
 
 				// Close the issue directly — refinery won't process it.
+				// Acceptance criteria gate prevents premature closure. (#2416)
 				if issueID != "" {
-					var closeErr error
-					for attempt := 1; attempt <= 3; attempt++ {
-						closeErr = bd.ForceCloseWithReason(
-							fmt.Sprintf("Direct merge to %s (convoy strategy, late detection)", defaultBranch), issueID)
-						if closeErr == nil {
-							fmt.Printf("%s Issue %s closed (direct merge)\n", style.Bold.Render("✓"), issueID)
-							break
-						}
-						if attempt < 3 {
-							style.PrintWarning("close attempt %d/3 failed: %v (retrying in %ds)", attempt, closeErr, attempt*2)
-							time.Sleep(time.Duration(attempt*2) * time.Second)
+					skipLateClose := false
+					if issue, showErr := bd.Show(issueID); showErr == nil {
+						if unchecked := beads.HasUncheckedCriteria(issue); unchecked > 0 {
+							style.PrintWarning("issue %s has %d unchecked acceptance criteria — skipping close", issueID, unchecked)
+							fmt.Printf("  The bead will remain open for witness/mayor review.\n")
+							skipLateClose = true
 						}
 					}
-					if closeErr != nil {
-						style.PrintWarning("could not close issue %s after 3 attempts: %v", issueID, closeErr)
+					if !skipLateClose {
+						var closeErr error
+						for attempt := 1; attempt <= 3; attempt++ {
+							closeErr = bd.ForceCloseWithReason(
+								fmt.Sprintf("Direct merge to %s (convoy strategy, late detection)", defaultBranch), issueID)
+							if closeErr == nil {
+								fmt.Printf("%s Issue %s closed (direct merge)\n", style.Bold.Render("✓"), issueID)
+								break
+							}
+							if attempt < 3 {
+								style.PrintWarning("close attempt %d/3 failed: %v (retrying in %ds)", attempt, closeErr, attempt*2)
+								time.Sleep(time.Duration(attempt*2) * time.Second)
+							}
+						}
+						if closeErr != nil {
+							style.PrintWarning("could not close issue %s after 3 attempts: %v", issueID, closeErr)
+						}
 					}
 				}
 
