@@ -1,3 +1,14 @@
+// Package cmd implements CLI commands for Gas Town.
+//
+// wl_schema_evolution.go handles schema versioning for wasteland (wl) sync.
+// Wasteland databases use a _meta table with a "schema_version" key in
+// MAJOR.MINOR format. When upstream bumps the version, gt wl sync must decide
+// whether to auto-apply (MINOR) or gate behind --upgrade (MAJOR).
+//
+// The flow:
+//  1. checkSchemaEvolution detects version deltas and blocks MAJOR bumps.
+//  2. detectSchemaChanges previews what tables/columns changed (informational).
+//  3. After dolt merge, verifyPostMergeSchema confirms the version landed.
 package cmd
 
 import (
@@ -89,29 +100,44 @@ func readDoltSchemaVersion(doltPath, forkDir, asOf string) (string, error) {
 	return version, nil
 }
 
-// checkSchemaEvolution fetches upstream version metadata and classifies any
-// schema change. It prints an informational line for MINOR bumps. For MAJOR
-// bumps it returns a descriptive error unless upgrade is true.
+// SchemaEvolutionResult captures the outcome of a schema version check so the
+// caller (wl_sync) can decide what to show and whether to proceed.
+type SchemaEvolutionResult struct {
+	Kind        SchemaChangeKind
+	LocalVer    string
+	UpstreamVer string
+}
+
+// checkSchemaEvolution compares local and upstream _meta.schema_version and
+// returns a structured result. For MAJOR bumps it returns an error unless
+// upgrade is true, preventing accidental breaking migrations.
 //
 // Precondition: caller has already run `dolt fetch upstream` so that
 // upstream/main is available for AS OF queries.
 //
-// Returns (false, nil) when the fork lacks a _meta table or schema_version row
-// (pre-versioned fork) — the pull proceeds without interruption.
-func checkSchemaEvolution(doltPath, forkDir string, upgrade bool) error {
+// Returns a zero result (SchemaUnchanged) when the fork lacks a _meta table
+// or schema_version row (pre-versioned fork) — the pull proceeds without
+// interruption.
+func checkSchemaEvolution(doltPath, forkDir string, upgrade bool) (SchemaEvolutionResult, error) {
 	localVer, err := readDoltSchemaVersion(doltPath, forkDir, "HEAD")
 	if err != nil || localVer == "" {
-		return nil // pre-versioned fork — skip check
+		return SchemaEvolutionResult{}, nil // pre-versioned fork — skip check
 	}
 
 	upstreamVer, err := readDoltSchemaVersion(doltPath, forkDir, "upstream/main")
 	if err != nil || upstreamVer == "" {
-		return nil // upstream has no version info — skip check
+		return SchemaEvolutionResult{}, nil // upstream has no version info — skip check
 	}
 
 	kind, err := ClassifySchemaChange(localVer, upstreamVer)
 	if err != nil {
-		return fmt.Errorf("schema version check: %w", err)
+		return SchemaEvolutionResult{}, fmt.Errorf("schema version check: %w", err)
+	}
+
+	result := SchemaEvolutionResult{
+		Kind:        kind,
+		LocalVer:    localVer,
+		UpstreamVer: upstreamVer,
 	}
 
 	switch kind {
@@ -121,7 +147,7 @@ func checkSchemaEvolution(doltPath, forkDir string, upgrade bool) error {
 		fmt.Printf("  Schema: %s → %s (MINOR — auto-applying)\n", localVer, upstreamVer)
 	case SchemaMajorChange:
 		if !upgrade {
-			return fmt.Errorf(
+			return result, fmt.Errorf(
 				"upstream schema version %s is a MAJOR upgrade from your local %s\n\n"+
 					"This may require manual data migration. To proceed:\n\n"+
 					"  gt wl sync --upgrade\n\n"+
@@ -130,6 +156,59 @@ func checkSchemaEvolution(doltPath, forkDir string, upgrade bool) error {
 			)
 		}
 		fmt.Printf("  Schema: %s → %s (MAJOR — upgrading as requested)\n", localVer, upstreamVer)
+	}
+
+	return result, nil
+}
+
+// detectSchemaChanges runs `dolt diff --schema` between HEAD and upstream/main
+// to produce a human-readable summary of table/column changes. Returns empty
+// string when there are no schema differences or when the diff fails
+// (non-fatal — the merge may still succeed via Dolt's built-in schema merge).
+func detectSchemaChanges(doltPath, forkDir string) string {
+	cmd := exec.Command(doltPath, "diff", "--schema", "HEAD", "upstream/main")
+	cmd.Dir = forkDir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	diff := strings.TrimSpace(string(out))
+	if diff == "" {
+		return ""
+	}
+	return diff
+}
+
+// verifyPostMergeSchema checks that the local _meta.schema_version matches the
+// expected upstream version after a merge. This catches partial merges where
+// data merged but the version row didn't update (e.g., due to a merge conflict
+// on _meta that was auto-resolved incorrectly).
+//
+// Returns nil when versions match or when _meta is absent (pre-versioned fork).
+func verifyPostMergeSchema(doltPath, forkDir, expectedVer string) error {
+	if expectedVer == "" {
+		return nil // no version expectation — nothing to verify
+	}
+
+	actualVer, err := readDoltSchemaVersion(doltPath, forkDir, "HEAD")
+	if err != nil {
+		return nil // can't read — non-fatal, might be pre-versioned
+	}
+
+	if actualVer == "" {
+		// _meta row disappeared during merge — warn but don't block
+		fmt.Printf("  ⚠ schema_version missing from _meta after merge (expected %s)\n", expectedVer)
+		return nil
+	}
+
+	if actualVer != expectedVer {
+		return fmt.Errorf(
+			"schema version mismatch after merge: expected %s, got %s\n\n"+
+				"The merge may have conflicted on the _meta table. Check:\n"+
+				"  dolt conflicts resolve _meta --theirs\n"+
+				"  dolt add _meta && dolt commit -m 'resolve schema version conflict'",
+			expectedVer, actualVer,
+		)
 	}
 
 	return nil

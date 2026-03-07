@@ -80,8 +80,18 @@ func runWLSync(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("fetching upstream: %w", err)
 		}
 
-		if err := checkSchemaEvolution(doltPath, forkDir, wlSyncUpgrade); err != nil {
+		result, err := checkSchemaEvolution(doltPath, forkDir, wlSyncUpgrade)
+		if err != nil {
 			return err
+		}
+
+		// Show schema diff preview when a version change is detected.
+		// This lets the user inspect exactly which tables/columns changed
+		// before committing to the merge.
+		if result.Kind != SchemaUnchanged {
+			if schemaDiff := detectSchemaChanges(doltPath, forkDir); schemaDiff != "" {
+				fmt.Printf("\n  Schema changes:\n%s\n", schemaDiff)
+			}
 		}
 
 		diffCmd := exec.Command(doltPath, "diff", "--stat", "HEAD", "upstream/main")
@@ -103,8 +113,16 @@ func runWLSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fetching upstream: %w", err)
 	}
 
-	if err := checkSchemaEvolution(doltPath, forkDir, wlSyncUpgrade); err != nil {
+	result, err := checkSchemaEvolution(doltPath, forkDir, wlSyncUpgrade)
+	if err != nil {
 		return err
+	}
+
+	// Preview schema changes before merge so the user can see what's coming.
+	if result.Kind != SchemaUnchanged {
+		if schemaDiff := detectSchemaChanges(doltPath, forkDir); schemaDiff != "" {
+			fmt.Printf("\n  Schema changes:\n%s\n", schemaDiff)
+		}
 	}
 
 	fmt.Printf("Merging upstream changes...\n")
@@ -115,6 +133,13 @@ func runWLSync(cmd *cobra.Command, args []string) error {
 	pullCmd.Stderr = os.Stderr
 	if err := pullCmd.Run(); err != nil {
 		return fmt.Errorf("merging upstream: %w", err)
+	}
+
+	// After merge, verify the schema version landed correctly.
+	// A mismatch indicates a merge conflict on _meta that needs manual
+	// resolution — better to catch it now than discover stale schema later.
+	if err := verifyPostMergeSchema(doltPath, forkDir, result.UpstreamVer); err != nil {
+		return err
 	}
 
 	fmt.Printf("\n%s Synced with upstream\n", style.Bold.Render("✓"))
