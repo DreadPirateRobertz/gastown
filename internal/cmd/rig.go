@@ -300,9 +300,11 @@ var (
 	rigAddBranch       string
 	rigAddPushURL      string
 	rigAddUpstreamURL  string
-	rigAddAdopt        bool
-	rigAddAdoptURL     string
-	rigAddAdoptForce   bool
+	rigAddAdopt           bool
+	rigAddAdoptURL       string
+	rigAddAdoptForce     bool
+	rigAddFilter         string
+	rigAddSparseCheckout []string
 	rigResetHandoff    bool
 	rigResetMail       bool
 	rigResetStale      bool
@@ -363,6 +365,8 @@ func init() {
 	rigAddCmd.Flags().BoolVar(&rigAddAdopt, "adopt", false, "Adopt an existing directory instead of creating new")
 	rigAddCmd.Flags().StringVar(&rigAddAdoptURL, "url", "", "Git remote URL for --adopt (default: auto-detected from origin)")
 	rigAddCmd.Flags().BoolVar(&rigAddAdoptForce, "force", false, "With --adopt, register even if git remote cannot be detected")
+	rigAddCmd.Flags().StringVar(&rigAddFilter, "filter", "", "Partial clone filter (e.g. \"blob:none\", \"tree:0\") to reduce clone size")
+	rigAddCmd.Flags().StringSliceVar(&rigAddSparseCheckout, "sparse-checkout", nil, "Sparse checkout paths (cone mode); comma-separated or repeated")
 
 	rigResetCmd.Flags().BoolVar(&rigResetHandoff, "handoff", false, "Clear handoff content")
 	rigResetCmd.Flags().BoolVar(&rigResetMail, "mail", false, "Clear stale mail messages")
@@ -532,17 +536,38 @@ func runRigAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid upstream URL %q: expected a remote URL (e.g. https://, git@host:, ssh://, s3://)", rigAddUpstreamURL)
 	}
 
+	// Validate clone filter if provided
+	if rigAddFilter != "" {
+		validFilters := []string{"blob:none", "tree:0"}
+		valid := false
+		for _, f := range validFilters {
+			if rigAddFilter == f {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("invalid --filter %q: supported values are %v", rigAddFilter, validFilters)
+		}
+		fmt.Printf("  Partial clone: --filter=%s\n", rigAddFilter)
+	}
+	if len(rigAddSparseCheckout) > 0 {
+		fmt.Printf("  Sparse checkout: %v\n", rigAddSparseCheckout)
+	}
+
 	startTime := time.Now()
 
 	// Add the rig
 	newRig, err := mgr.AddRig(rig.AddRigOptions{
-		Name:          name,
-		GitURL:        gitURL,
-		PushURL:       rigAddPushURL,
-		UpstreamURL:   rigAddUpstreamURL,
-		BeadsPrefix:   rigAddPrefix,
-		LocalRepo:     rigAddLocalRepo,
-		DefaultBranch: rigAddBranch,
+		Name:           name,
+		GitURL:         gitURL,
+		PushURL:        rigAddPushURL,
+		UpstreamURL:    rigAddUpstreamURL,
+		BeadsPrefix:    rigAddPrefix,
+		LocalRepo:      rigAddLocalRepo,
+		DefaultBranch:  rigAddBranch,
+		CloneFilter:    rigAddFilter,
+		SparseCheckout: rigAddSparseCheckout,
 	})
 	if err != nil {
 		return fmt.Errorf("adding rig: %w", err)
