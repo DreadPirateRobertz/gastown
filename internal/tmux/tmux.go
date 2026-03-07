@@ -57,6 +57,49 @@ func validateSessionName(name string) error {
 	return nil
 }
 
+// validateCommandBinary extracts the binary path from a tmux session command
+// and verifies it exists on disk. Handles common patterns:
+//   - "exec env VAR=val /path/to/binary --args"
+//   - "/path/to/binary --args"
+//   - "sh -c '...'" (skipped — shell will handle resolution)
+//
+// Only checks absolute paths to avoid false positives on shell builtins.
+func validateCommandBinary(command string) error {
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return nil
+	}
+
+	// Skip past "exec" and "env" prefixes, and KEY=VAL assignments.
+	i := 0
+	for i < len(fields) {
+		f := fields[i]
+		if f == "exec" || f == "env" {
+			i++
+			continue
+		}
+		if strings.Contains(f, "=") && !strings.HasPrefix(f, "/") && !strings.HasPrefix(f, "-") {
+			i++
+			continue
+		}
+		break
+	}
+
+	if i >= len(fields) {
+		return nil
+	}
+
+	binary := fields[i]
+	// Only validate absolute paths — relative or bare names are resolved by shell.
+	if !strings.HasPrefix(binary, "/") {
+		return nil
+	}
+	if _, err := os.Stat(binary); err != nil {
+		return fmt.Errorf("command binary not found: %s", binary)
+	}
+	return nil
+}
+
 // defaultSocket is the tmux socket name (-L flag) for multi-instance isolation.
 // When set, all tmux commands use this socket instead of the default server.
 // Access is protected by defaultSocketMu for concurrent test safety.
@@ -255,6 +298,9 @@ func (t *Tmux) NewSessionWithCommand(name, workDir, command string) error {
 			return fmt.Errorf("work directory %q is not a directory", workDir)
 		}
 	}
+	if err := validateCommandBinary(command); err != nil {
+		return err
+	}
 
 	// Two-step creation: create session with default shell first, configure
 	// remain-on-exit, then replace the shell with the actual command. This
@@ -310,6 +356,9 @@ func (t *Tmux) NewSessionWithCommandAndEnv(name, workDir, command string, env ma
 		if !info.IsDir() {
 			return fmt.Errorf("work directory %q is not a directory", workDir)
 		}
+	}
+	if err := validateCommandBinary(command); err != nil {
+		return err
 	}
 
 	// Two-step creation: create session with env vars and default shell, then
