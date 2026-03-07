@@ -178,6 +178,16 @@ func AgentEnv(cfg AgentEnvConfig) map[string]string {
 	// See: https://github.com/steveyegge/beads/issues/2241
 	env["BD_BACKUP_ENABLED"] = "false"
 
+	// Propagate Dolt server port to agent sessions so bd connects to the
+	// central Dolt server instead of auto-starting a rogue local instance.
+	// Gas Town uses GT_DOLT_PORT; beads uses BEADS_DOLT_PORT. We set both
+	// to ensure the agent's bd commands reach the correct server regardless
+	// of which variable they check. See: #2412
+	if doltPort := os.Getenv("GT_DOLT_PORT"); doltPort != "" {
+		env["GT_DOLT_PORT"] = doltPort
+		env["BEADS_DOLT_PORT"] = doltPort
+	}
+
 	// Clear NODE_OPTIONS to prevent debugger flags (e.g., --inspect from VSCode)
 	// from being inherited through tmux into Claude's Node.js runtime.
 	// This is the PRIMARY guard: setting it here (the single source of truth

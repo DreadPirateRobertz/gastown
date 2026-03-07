@@ -827,6 +827,39 @@ func TestAgentEnv_DisablesBdBackup(t *testing.T) {
 	}
 }
 
+func TestAgentEnv_PropagatesDoltPort(t *testing.T) {
+	// When GT_DOLT_PORT is set, AgentEnv must propagate it as both
+	// GT_DOLT_PORT and BEADS_DOLT_PORT so agent sessions connect to
+	// the central Dolt server instead of auto-starting a rogue instance.
+	// See: #2412
+	t.Setenv("GT_DOLT_PORT", "13307")
+	env := AgentEnv(AgentEnvConfig{
+		Role:     "polecat",
+		Rig:      "myrig",
+		AgentName: "toast",
+		TownRoot: "/town",
+	})
+	assertEnv(t, env, "GT_DOLT_PORT", "13307")
+	assertEnv(t, env, "BEADS_DOLT_PORT", "13307")
+}
+
+func TestAgentEnv_NoDoltPortWhenUnset(t *testing.T) {
+	// When GT_DOLT_PORT is not set, neither port var should appear.
+	t.Setenv("GT_DOLT_PORT", "")
+	env := AgentEnv(AgentEnvConfig{
+		Role:     "crew",
+		Rig:      "myrig",
+		AgentName: "emma",
+		TownRoot: "/town",
+	})
+	if _, ok := env["GT_DOLT_PORT"]; ok {
+		t.Error("GT_DOLT_PORT should not be set when env var is empty")
+	}
+	if _, ok := env["BEADS_DOLT_PORT"]; ok {
+		t.Error("BEADS_DOLT_PORT should not be set when env var is empty")
+	}
+}
+
 func TestBuildStartupCommandWithEnv_IncludesNodeOptions(t *testing.T) {
 	t.Parallel()
 	// Integration test: verify BuildStartupCommandWithEnv output includes NODE_OPTIONS=
