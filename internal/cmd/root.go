@@ -62,6 +62,7 @@ var beadsExemptCommands = map[string]bool{
 	"feed":       true,
 	"rig":        true,
 	"config":     true,
+	"reload":     true,
 	"install":    true,
 	"tap":        true,
 	"dnd":        true,
