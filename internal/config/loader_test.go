@@ -439,6 +439,97 @@ func TestLoadRigSettingsNotFound(t *testing.T) {
 	}
 }
 
+func TestLookupRigPrefix(t *testing.T) {
+	t.Parallel()
+	townDir := t.TempDir()
+	mayorDir := filepath.Join(townDir, "mayor")
+	os.MkdirAll(mayorDir, 0755)
+
+	rigsJSON := `{"version":1,"rigs":{"myrig":{"git_url":"x","beads":{"prefix":"mr"}},"nopfx":{"git_url":"y"}}}`
+	os.WriteFile(filepath.Join(mayorDir, "rigs.json"), []byte(rigsJSON), 0644)
+
+	t.Run("found with prefix", func(t *testing.T) {
+		prefix, found := LookupRigPrefix(townDir, "myrig")
+		if !found || prefix != "mr" {
+			t.Errorf("LookupRigPrefix() = (%q, %v), want (%q, true)", prefix, found, "mr")
+		}
+	})
+
+	t.Run("found without prefix", func(t *testing.T) {
+		prefix, found := LookupRigPrefix(townDir, "nopfx")
+		if !found || prefix != "gt" {
+			t.Errorf("LookupRigPrefix() = (%q, %v), want (%q, true)", prefix, found, "gt")
+		}
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		_, found := LookupRigPrefix(townDir, "nonexistent")
+		if found {
+			t.Error("LookupRigPrefix() found=true for nonexistent rig")
+		}
+	})
+}
+
+func TestGetRigPrefixFromConfigJSON(t *testing.T) {
+	t.Parallel()
+
+	t.Run("finds config.json in current dir", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := `{"type":"rig","version":1,"name":"test","git_url":"git@example.com:u/r.git","created_at":"2026-01-01T00:00:00Z","beads":{"prefix":"ts"}}`
+		os.WriteFile(filepath.Join(dir, "config.json"), []byte(cfg), 0644)
+
+		got := GetRigPrefixFromConfigJSON(dir)
+		if got != "ts" {
+			t.Errorf("GetRigPrefixFromConfigJSON() = %q, want %q", got, "ts")
+		}
+	})
+
+	t.Run("walks up to find config.json", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := `{"type":"rig","version":1,"name":"test","git_url":"git@example.com:u/r.git","created_at":"2026-01-01T00:00:00Z","beads":{"prefix":"ts"}}`
+		os.WriteFile(filepath.Join(dir, "config.json"), []byte(cfg), 0644)
+
+		// Start from a subdirectory
+		subDir := filepath.Join(dir, "mayor", "rig")
+		os.MkdirAll(subDir, 0755)
+
+		got := GetRigPrefixFromConfigJSON(subDir)
+		if got != "ts" {
+			t.Errorf("GetRigPrefixFromConfigJSON() = %q, want %q", got, "ts")
+		}
+	})
+
+	t.Run("strips trailing dash", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := `{"type":"rig","version":1,"name":"test","git_url":"git@example.com:u/r.git","created_at":"2026-01-01T00:00:00Z","beads":{"prefix":"ts-"}}`
+		os.WriteFile(filepath.Join(dir, "config.json"), []byte(cfg), 0644)
+
+		got := GetRigPrefixFromConfigJSON(dir)
+		if got != "ts" {
+			t.Errorf("GetRigPrefixFromConfigJSON() = %q, want %q", got, "ts")
+		}
+	})
+
+	t.Run("returns empty when no config.json", func(t *testing.T) {
+		dir := t.TempDir()
+		got := GetRigPrefixFromConfigJSON(dir)
+		if got != "" {
+			t.Errorf("GetRigPrefixFromConfigJSON() = %q, want empty", got)
+		}
+	})
+
+	t.Run("returns empty when config.json has no beads prefix", func(t *testing.T) {
+		dir := t.TempDir()
+		cfg := `{"type":"rig","version":1,"name":"test","git_url":"git@example.com:u/r.git","created_at":"2026-01-01T00:00:00Z"}`
+		os.WriteFile(filepath.Join(dir, "config.json"), []byte(cfg), 0644)
+
+		got := GetRigPrefixFromConfigJSON(dir)
+		if got != "" {
+			t.Errorf("GetRigPrefixFromConfigJSON() = %q, want empty", got)
+		}
+	})
+}
+
 func TestMayorConfigRoundTrip(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

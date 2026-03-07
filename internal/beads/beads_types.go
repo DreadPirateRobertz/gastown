@@ -357,30 +357,40 @@ func ensureDatabaseInitialized(beadsDir string) error {
 // detectPrefix determines the beads prefix for a directory.
 // Resolution order:
 //  1. Town-level config: FindTownRoot → config.GetRigPrefix (authoritative source from rigs.json)
-//  2. Local config.yaml: issue-prefix or prefix field
-//  3. Default: "gt"
+//  2. Rig config.json: walk up from beadsDir looking for config.json with beads.prefix
+//  3. Local config.yaml: issue-prefix or prefix field
+//  4. Default: "gt"
 //
 // All candidates are validated against prefixRe before use.
 //
-// Known limitation: when beadsDir is a routed path (e.g., mayor/rig/.beads
-// via beads routing), filepath.Base(filepath.Dir(beadsDir)) yields "rig" not
-// the actual rig name. GetRigPrefix will not find "rig" in rigs.json and
-// returns the default "gt". This is a safe fallback — "gt" is the universal
-// default prefix — but rigs with custom prefixes accessed via routed paths
-// will silently use "gt" instead. Fixing this would require walking up the
-// directory tree to resolve the actual rig name, which is out of scope for
-// this crash-prevention guard.
+// Step 2 handles the case where the rig name can't be derived from the directory
+// structure (e.g., routed paths like mayor/rig/.beads where filepath.Base yields
+// "rig" instead of the actual rig name). The rig's config.json always has the
+// correct prefix regardless of how the path was resolved.
 func detectPrefix(beadsDir string) string {
 	// 1. Try authoritative source: rigs.json via town root
 	rigDir := filepath.Dir(beadsDir)
+	foundInRigsJSON := false
 	if townRoot := FindTownRoot(rigDir); townRoot != "" {
 		rigName := filepath.Base(rigDir)
-		if prefix := config.GetRigPrefix(townRoot, rigName); prefix != "" && prefixRe.MatchString(prefix) {
+		prefix, found := config.LookupRigPrefix(townRoot, rigName)
+		if found && prefixRe.MatchString(prefix) {
+			return prefix
+		}
+		foundInRigsJSON = found
+	}
+
+	// 2. Try rig config.json: walk up from beadsDir looking for a rig config.json
+	// with beads.prefix. This handles routed paths (where the rig name derived
+	// from the directory structure doesn't match an entry in rigs.json) and
+	// standalone rigs outside a town.
+	if !foundInRigsJSON {
+		if prefix := config.GetRigPrefixFromConfigJSON(rigDir); prefix != "" && prefixRe.MatchString(prefix) {
 			return prefix
 		}
 	}
 
-	// 2. Fallback: read from config.yaml.
+	// 3. Fallback: read from config.yaml.
 	// NOTE: Inside towns, this is typically unreachable because GetRigPrefix
 	// always returns at least "gt" (the default) when a rig isn't found in
 	// rigs.json. This fallback is primarily for standalone rigs outside towns.
@@ -406,7 +416,7 @@ func detectPrefix(beadsDir string) string {
 		}
 	}
 
-	// 3. Default
+	// 4. Default
 	return "gt"
 }
 
