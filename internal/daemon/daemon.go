@@ -480,6 +480,9 @@ func (d *Daemon) Run() error {
 						d.logger.Printf("Warning: failed to reload restart tracker: %v", err)
 					}
 				}
+			} else if isConfigReloadSignal(sig) {
+				// Full config reload (from 'gt reload')
+				d.reloadConfig()
 			} else {
 				d.logger.Printf("Received signal %v, shutting down", sig)
 				return d.shutdown(state)
@@ -1484,6 +1487,45 @@ func (d *Daemon) isRigOperational(rigName string) (bool, string) {
 // processLifecycleRequests checks for and processes lifecycle requests.
 func (d *Daemon) processLifecycleRequests() {
 	d.ProcessLifecycleRequests()
+}
+
+// reloadConfig performs a full config reload in response to SIGHUP (from 'gt reload').
+// Reloads patrol config, env vars, prefix registry, and restart tracker.
+func (d *Daemon) reloadConfig() {
+	d.logger.Println("Received config reload signal (SIGHUP), reloading all config")
+
+	// 1. Reload patrol config from mayor/daemon.json
+	newPatrolConfig := LoadPatrolConfig(d.config.TownRoot)
+	if newPatrolConfig != nil {
+		d.patrolConfig = newPatrolConfig
+		d.logger.Println("Reloaded patrol config from disk")
+
+		// 2. Propagate env vars from daemon.json to this process
+		for k, v := range newPatrolConfig.Env {
+			os.Setenv(k, v)
+			d.logger.Printf("Set env %s=%s from daemon.json", k, v)
+		}
+	} else {
+		d.logger.Println("No patrol config found, using existing config")
+	}
+
+	// 3. Reload prefix registry
+	if err := session.InitRegistry(d.config.TownRoot); err != nil {
+		d.logger.Printf("Warning: failed to reload prefix registry: %v", err)
+	} else {
+		d.logger.Println("Reloaded prefix registry")
+	}
+
+	// 4. Reload restart tracker
+	if d.restartTracker != nil {
+		if err := d.restartTracker.Load(); err != nil {
+			d.logger.Printf("Warning: failed to reload restart tracker: %v", err)
+		} else {
+			d.logger.Println("Reloaded restart tracker")
+		}
+	}
+
+	d.logger.Println("Config reload complete")
 }
 
 // shutdown performs graceful shutdown.
