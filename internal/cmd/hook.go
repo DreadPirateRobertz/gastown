@@ -555,6 +555,31 @@ func normalizeHookShowTarget(target string) string {
 	if identity, err := session.ParseAddress(target); err == nil {
 		return identity.Address()
 	}
+
+	// Direct shorthand expansion: rig/name → rig/polecats/name or rig/crew/name.
+	// This handles the case where the session name roundtrip fails due to
+	// uninitialized prefix registry. See GH#2371.
+	parts := strings.Split(target, "/")
+	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+		name := parts[1]
+		// Check for known roles — don't expand those
+		switch strings.ToLower(name) {
+		case "witness", "refinery", "mayor", "deacon":
+			// Already a valid canonical address
+		default:
+			// Check if it's a crew member by looking for the directory
+			townRoot := detectTownRootFromCwd()
+			if townRoot != "" {
+				crewPath := filepath.Join(townRoot, parts[0], "crew", name)
+				if info, statErr := os.Stat(crewPath); statErr == nil && info.IsDir() {
+					return parts[0] + "/crew/" + name
+				}
+			}
+			// Default to polecat
+			return parts[0] + "/polecats/" + strings.ToLower(name)
+		}
+	}
+
 	return target
 }
 

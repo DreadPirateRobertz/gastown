@@ -367,72 +367,24 @@ func runMoleculeStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Try to find agent bead and read hook slot
-	// This is the preferred method - agent beads have a hook_bead field
+	// Resolve agent bead ID for display purposes only.
 	agentBeadID := buildAgentBeadID(target, roleCtx.Role, townRoot)
-	var hookBead *beads.Issue
-
 	if agentBeadID != "" {
-		// Resolve the correct beads directory for the agent bead using prefix-based
-		// routing. This matches how updateAgentHookBead resolves the directory when
-		// setting the hook (via beads.ResolveHookDir).
 		agentBeadPath := beads.ResolveHookDir(townRoot, agentBeadID, workDir)
 		agentB := b
 		if agentBeadPath != workDir {
 			agentB = beads.New(agentBeadPath)
 		}
-
-		// Try to fetch the agent bead
 		agentBead, err := agentB.Show(agentBeadID)
 		if err == nil && beads.IsAgentBead(agentBead) {
 			status.AgentBeadID = agentBeadID
-
-			// Read hook_bead from the agent bead's database field (not description!)
-			// The hook_bead column is updated by `bd slot set` in UpdateAgentState.
-			// IMPORTANT: Don't use ParseAgentFields on description - the description
-			// field may contain stale data, causing the wrong issue to be hooked.
-			if agentBead.HookBead != "" {
-				// The hooked bead may be in a different database than the agent bead.
-				// Resolve its path using prefix-based routing.
-				hookBeadPath := beads.ResolveHookDir(townRoot, agentBead.HookBead, workDir)
-				hookB := b
-				if hookBeadPath != workDir {
-					hookB = beads.New(hookBeadPath)
-				}
-				hookBead, err = hookB.Show(agentBead.HookBead)
-				if err != nil {
-					// Hook bead referenced but not found - report error but continue
-					hookBead = nil
-				}
-			}
 		}
-		// If agent bead not found or not an agent type, fall through to legacy approach
 	}
 
-	// If we found a hook bead via agent bead, use it
-	if hookBead != nil {
-		status.HasWork = true
-		status.PinnedBead = hookBead
-
-		// Check for attached molecule
-		attachment := beads.ParseAttachmentFields(hookBead)
-		if attachment != nil {
-			status.AttachedMolecule = attachment.AttachedMolecule
-			status.AttachedAt = attachment.AttachedAt
-			status.AttachedArgs = attachment.AttachedArgs
-
-			// Check if it's a wisp
-			status.IsWisp = strings.Contains(hookBead.Description, "wisp: true") ||
-				strings.Contains(hookBead.Description, "is_wisp: true")
-
-			// Get progress if there's an attached molecule
-			if attachment.AttachedMolecule != "" {
-				progress, _ := getMoleculeProgressInfo(b, attachment.AttachedMolecule)
-				status.Progress = progress
-				status.NextAction = determineNextAction(status)
-			}
-		}
-	} else {
-		// FALLBACK: Query for hooked beads (work on agent's hook)
+	// Query for hooked beads using the authoritative source: bead status + assignee.
+	// Agent bead's hook_bead field is no longer maintained (updateAgentHookBead is
+	// a no-op since hq-l6mm5), so reading it returns stale data. See GH#2371.
+	{
 		// First try status=hooked (work that's been slung but not yet claimed)
 		hookedBeads, err := b.List(beads.ListOptions{
 			Status:   beads.StatusHooked,
