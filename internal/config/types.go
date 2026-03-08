@@ -1145,6 +1145,12 @@ type MergeQueueConfig struct {
 	// Nil defaults to true (merged branches are deleted).
 	DeleteMergedBranches *bool `json:"delete_merged_branches,omitempty"`
 
+	// PRMode controls whether the refinery creates GitHub PRs instead of
+	// merging directly. When true, the refinery pushes the polecat branch
+	// to a clean PR branch, creates a GitHub PR, then deletes the original
+	// polecat branch. Nil defaults to false (direct merge).
+	PRMode *bool `json:"pr_mode,omitempty"`
+
 	// RetryFlakyTests is the number of times to retry flaky tests.
 	RetryFlakyTests int `json:"retry_flaky_tests"`
 
@@ -1209,6 +1215,15 @@ func (c *MergeQueueConfig) IsDeleteMergedBranchesEnabled() bool {
 		return true
 	}
 	return *c.DeleteMergedBranches
+}
+
+// IsPRModeEnabled returns whether the refinery should create GitHub PRs
+// instead of merging directly. Nil-safe, defaults to false.
+func (c *MergeQueueConfig) IsPRModeEnabled() bool {
+	if c.PRMode == nil {
+		return false
+	}
+	return *c.PRMode
 }
 
 // boolPtr returns a pointer to a bool value.

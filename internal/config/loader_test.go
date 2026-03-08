@@ -4553,6 +4553,7 @@ func TestMergeQueueConfig_PartialJSON_BoolDefaults(t *testing.T) {
 		wantPolecatIntegration  bool
 		wantRefineryIntegration bool
 		wantAutoLand            bool
+		wantPRMode              bool
 	}{
 		{
 			name: "minimal config — all *bool fields omitted",
@@ -4563,6 +4564,7 @@ func TestMergeQueueConfig_PartialJSON_BoolDefaults(t *testing.T) {
 			wantPolecatIntegration:  true,
 			wantRefineryIntegration: true,
 			wantAutoLand:            false,
+			wantPRMode:              false,
 		},
 		{
 			name: "explicit false — should be respected",
@@ -4573,13 +4575,15 @@ func TestMergeQueueConfig_PartialJSON_BoolDefaults(t *testing.T) {
 				"delete_merged_branches": false,
 				"integration_branch_polecat_enabled": false,
 				"integration_branch_refinery_enabled": false,
-				"integration_branch_auto_land": false
+				"integration_branch_auto_land": false,
+				"pr_mode": false
 			}`,
 			wantRunTests:            false,
 			wantDeleteMerged:        false,
 			wantPolecatIntegration:  false,
 			wantRefineryIntegration: false,
 			wantAutoLand:            false,
+			wantPRMode:              false,
 		},
 		{
 			name: "explicit true — should be respected",
@@ -4590,13 +4594,15 @@ func TestMergeQueueConfig_PartialJSON_BoolDefaults(t *testing.T) {
 				"delete_merged_branches": true,
 				"integration_branch_polecat_enabled": true,
 				"integration_branch_refinery_enabled": true,
-				"integration_branch_auto_land": true
+				"integration_branch_auto_land": true,
+				"pr_mode": true
 			}`,
 			wantRunTests:            true,
 			wantDeleteMerged:        true,
 			wantPolecatIntegration:  true,
 			wantRefineryIntegration: true,
 			wantAutoLand:            true,
+			wantPRMode:              true,
 		},
 	}
 
@@ -4621,6 +4627,9 @@ func TestMergeQueueConfig_PartialJSON_BoolDefaults(t *testing.T) {
 			}
 			if got := cfg.IsIntegrationBranchAutoLandEnabled(); got != tt.wantAutoLand {
 				t.Errorf("IsIntegrationBranchAutoLandEnabled() = %v, want %v", got, tt.wantAutoLand)
+			}
+			if got := cfg.IsPRModeEnabled(); got != tt.wantPRMode {
+				t.Errorf("IsPRModeEnabled() = %v, want %v", got, tt.wantPRMode)
 			}
 		})
 	}
@@ -4652,6 +4661,9 @@ func TestMergeQueueConfig_PartialJSON_NilPointers(t *testing.T) {
 	}
 	if cfg.IntegrationBranchAutoLand != nil {
 		t.Errorf("IntegrationBranchAutoLand should be nil when omitted, got %v", *cfg.IntegrationBranchAutoLand)
+	}
+	if cfg.PRMode != nil {
+		t.Errorf("PRMode should be nil when omitted, got %v", *cfg.PRMode)
 	}
 }
 

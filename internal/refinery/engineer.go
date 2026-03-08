@@ -86,6 +86,11 @@ type MergeQueueConfig struct {
 	// DeleteMergedBranches controls whether to delete branches after merge.
 	DeleteMergedBranches bool `json:"delete_merged_branches"`
 
+	// PRMode controls whether the refinery creates GitHub PRs instead of
+	// merging directly. When true, the refinery creates a PR and deletes
+	// the polecat branch afterward.
+	PRMode bool `json:"pr_mode"`
+
 	// RetryFlakyTests is the number of times to retry flaky tests.
 	RetryFlakyTests int `json:"retry_flaky_tests"`
 
@@ -292,6 +297,7 @@ func (e *Engineer) LoadConfig() error {
 		RunTests             *bool                      `json:"run_tests"`
 		TestCommand          *string                    `json:"test_command"`
 		DeleteMergedBranches *bool                      `json:"delete_merged_branches"`
+		PRMode               *bool                      `json:"pr_mode"`
 		RetryFlakyTests      *int                       `json:"retry_flaky_tests"`
 		PollInterval         *string                    `json:"poll_interval"`
 		MaxConcurrent        *int                       `json:"max_concurrent"`
@@ -319,6 +325,9 @@ func (e *Engineer) LoadConfig() error {
 	}
 	if mqRaw.DeleteMergedBranches != nil {
 		e.config.DeleteMergedBranches = *mqRaw.DeleteMergedBranches
+	}
+	if mqRaw.PRMode != nil {
+		e.config.PRMode = *mqRaw.PRMode
 	}
 	if mqRaw.RetryFlakyTests != nil {
 		e.config.RetryFlakyTests = *mqRaw.RetryFlakyTests

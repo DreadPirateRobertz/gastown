@@ -324,5 +324,6 @@ func buildRefineryPatrolVars(ctx RoleContext) []string {
 		vars = append(vars, fmt.Sprintf("build_command=%s", mq.BuildCommand))
 	}
 	vars = append(vars, fmt.Sprintf("delete_merged_branches=%t", mq.IsDeleteMergedBranchesEnabled()))
+	vars = append(vars, fmt.Sprintf("pr_mode=%t", mq.IsPRModeEnabled()))
 	return vars
 }
