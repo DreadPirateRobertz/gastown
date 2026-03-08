@@ -16,6 +16,7 @@ package doltserver
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -90,6 +91,7 @@ func MigrateAgentBeadsToWisps(townRoot, workDir string, dryRun bool) (*MigrateWi
 func bdSQL(workDir, query string) error {
 	cmd := exec.Command("bd", "sql", query)
 	cmd.Dir = workDir
+	cmd.Env = stripBeadsDirEnv(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("bd sql: %s: %w", strings.TrimSpace(string(output)), err)
@@ -101,6 +103,7 @@ func bdSQL(workDir, query string) error {
 func bdSQLCSV(workDir, query string) (string, error) {
 	cmd := exec.Command("bd", "sql", "--csv", query)
 	cmd.Dir = workDir
+	cmd.Env = stripBeadsDirEnv(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("bd sql: %s: %w", strings.TrimSpace(string(output)), err)
@@ -112,11 +115,25 @@ func bdSQLCSV(workDir, query string) (string, error) {
 func bdExec(workDir string, args ...string) error {
 	cmd := exec.Command("bd", args...)
 	cmd.Dir = workDir
+	cmd.Env = stripBeadsDirEnv(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("bd %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(string(output)), err)
 	}
 	return nil
+}
+
+// stripBeadsDirEnv removes BEADS_DIR from the environment slice so bd
+// discovers the database from its working directory instead of an inherited
+// env var that may point to the wrong database (GH#2423, gt-b8wo7).
+func stripBeadsDirEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, e := range env {
+		if !strings.HasPrefix(e, "BEADS_DIR=") {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // bdSQLCount executes a COUNT query and returns the integer result.

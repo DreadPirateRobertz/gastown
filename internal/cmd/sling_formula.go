@@ -55,17 +55,24 @@ func trimJSONForError(jsonOutput []byte) string {
 // Formulas are TOML files (.formula.toml).
 // Uses --allow-stale for consistency with verifyBeadExists.
 func verifyFormulaExists(formulaName string) error {
+	// Resolve town root so bd routes to the correct beads database
+	// instead of relying on inherited BEADS_DIR (GH#2423, gt-99jw0).
+	townRoot, _ := workspace.FindFromCwd()
+	dir := townRoot // empty string is fine — BdCmd ignores empty Dir()
+
 	// Try bd formula show (handles all formula file formats)
 	// Use Output() instead of Run() to detect bd exit 0 bug:
 	// when formula not found, bd may exit 0 but produce empty stdout.
 	// Stderr discarded — first attempt may fail expectedly (retry with mol- prefix).
 	if out, err := BdCmd("formula", "show", formulaName, "--allow-stale").
+		Dir(dir).StripBeadsDir().
 		Stderr(io.Discard).Output(); err == nil && len(out) > 0 {
 		return nil
 	}
 
 	// Try with mol- prefix
 	if out, err := BdCmd("formula", "show", "mol-"+formulaName, "--allow-stale").
+		Dir(dir).StripBeadsDir().
 		Stderr(io.Discard).Output(); err == nil && len(out) > 0 {
 		return nil
 	}
@@ -139,6 +146,7 @@ func runSlingFormula(ctx context.Context, args []string) error {
 	fmt.Printf("  Cooking formula...\n")
 	if err := BdCmd("cook", formulaName).
 		Dir(formulaWorkDir).
+		StripBeadsDir().
 		WithGTRoot(townRoot).
 		Run(); err != nil {
 		telemetry.RecordMolCook(ctx, formulaName, err)
@@ -157,6 +165,7 @@ func runSlingFormula(ctx context.Context, args []string) error {
 
 	wispOut, err := BdCmd(wispArgs...).
 		Dir(formulaWorkDir).
+		StripBeadsDir().
 		WithAutoCommit().
 		WithGTRoot(townRoot).
 		Output()

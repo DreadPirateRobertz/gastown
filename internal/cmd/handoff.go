@@ -1335,9 +1335,11 @@ func looksLikeBeadID(s string) bool {
 
 // hookBeadForHandoff attaches a bead to the current agent's hook.
 func hookBeadForHandoff(beadID string) error {
-	// Verify the bead exists first
-	verifyCmd := exec.Command("bd", "show", beadID, "--json")
-	if err := verifyCmd.Run(); err != nil {
+	// Verify the bead exists first.
+	// Use BdCmd with StripBeadsDir so bd routes via the bead's prefix (GH#2423).
+	if err := BdCmd("show", beadID, "--json").
+		StripBeadsDir().
+		Run(); err != nil {
 		return fmt.Errorf("bead '%s' not found", beadID)
 	}
 
@@ -1354,10 +1356,10 @@ func hookBeadForHandoff(beadID string) error {
 		return nil
 	}
 
-	// Pin the bead using bd update (discovery-based approach)
-	pinCmd := exec.Command("bd", "update", beadID, "--status=pinned", "--assignee="+agentID)
-	pinCmd.Stderr = os.Stderr
-	if err := pinCmd.Run(); err != nil {
+	// Pin the bead using BdCmd with StripBeadsDir for correct routing.
+	if err := BdCmd("update", beadID, "--status=pinned", "--assignee="+agentID).
+		StripBeadsDir().
+		Run(); err != nil {
 		return fmt.Errorf("pinning bead: %w", err)
 	}
 
