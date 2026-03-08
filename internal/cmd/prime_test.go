@@ -1022,6 +1022,77 @@ func TestOutputContinuationDirective(t *testing.T) {
 	})
 }
 
+// TestRigBeadsRoot verifies that rigBeadsRoot returns the rig root for rig-level
+// agents and ctx.WorkDir for town-level agents. This is critical for polecats
+// that need to query beads from the rig database, not their worktree (GH#2503).
+func TestRigBeadsRoot(t *testing.T) {
+	cases := []struct {
+		name string
+		ctx  RoleContext
+		want string
+	}{
+		{
+			name: "polecat uses rig root",
+			ctx: RoleContext{
+				Role:     RolePolecat,
+				Rig:      "gastown",
+				Polecat:  "alpha",
+				TownRoot: "/Users/hal/gt",
+				WorkDir:  "/Users/hal/gt/gastown/polecats/alpha/gastown",
+			},
+			want: "/Users/hal/gt/gastown",
+		},
+		{
+			name: "crew uses rig root",
+			ctx: RoleContext{
+				Role:     RoleCrew,
+				Rig:      "gastown",
+				Polecat:  "deckard",
+				TownRoot: "/Users/hal/gt",
+				WorkDir:  "/Users/hal/gt/gastown/crew/deckard",
+			},
+			want: "/Users/hal/gt/gastown",
+		},
+		{
+			name: "witness uses rig root",
+			ctx: RoleContext{
+				Role:     RoleWitness,
+				Rig:      "beads",
+				TownRoot: "/Users/hal/gt",
+				WorkDir:  "/Users/hal/gt/beads/witness",
+			},
+			want: "/Users/hal/gt/beads",
+		},
+		{
+			name: "mayor falls back to workdir (no rig)",
+			ctx: RoleContext{
+				Role:     RoleMayor,
+				TownRoot: "/Users/hal/gt",
+				WorkDir:  "/Users/hal/gt/mayor",
+			},
+			want: "/Users/hal/gt/mayor",
+		},
+		{
+			name: "no town root falls back to workdir",
+			ctx: RoleContext{
+				Role:    RolePolecat,
+				Rig:     "gastown",
+				WorkDir: "/tmp/some/path",
+			},
+			want: "/tmp/some/path",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := rigBeadsRoot(tc.ctx)
+			if got != tc.want {
+				t.Fatalf("rigBeadsRoot() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestInjectHandoffContext verifies that injectHandoffContext doesn't panic
 // when run without a valid mail setup. (GH#1996)
 func TestInjectHandoffContext(t *testing.T) {

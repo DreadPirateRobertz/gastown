@@ -608,8 +608,15 @@ func findAgentWork(ctx RoleContext) *beads.Issue {
 
 // findAgentWorkOnce performs a single attempt to find hooked work for an agent.
 func findAgentWorkOnce(ctx RoleContext, agentID string) *beads.Issue {
-	b := beads.New(ctx.WorkDir)
-	// Primary: agent bead's hook_bead field (authoritative, set by bd slot set during sling)
+	// Use rig root for beads queries, not ctx.WorkDir. Polecat worktrees rely
+	// on .beads/redirect which may not resolve correctly in all cases (GH#2503).
+	// The rig root always has the authoritative beads database.
+	b := beads.New(rigBeadsRoot(ctx))
+
+	// Primary: agent bead's hook_bead field.
+	// NOTE: updateAgentHookBead is a no-op since hq-l6mm5, so HookBead is
+	// typically empty. This path is kept for backward compatibility with any
+	// agent beads that still have hook_bead set from before the refactor.
 	agentBeadID := buildAgentBeadID(agentID, ctx.Role, ctx.TownRoot)
 	if agentBeadID != "" {
 		agentBeadDir := beads.ResolveHookDir(ctx.TownRoot, agentBeadID, ctx.WorkDir)
@@ -624,7 +631,7 @@ func findAgentWorkOnce(ctx RoleContext, agentID string) *beads.Issue {
 		}
 	}
 
-	// Fallback: query by assignee
+	// Fallback: query by assignee from rig beads
 	hookedBeads, err := b.List(beads.ListOptions{
 		Status:   beads.StatusHooked,
 		Assignee: agentID,
@@ -670,6 +677,18 @@ func findAgentWorkOnce(ctx RoleContext, agentID string) *beads.Issue {
 		return nil
 	}
 	return hookedBeads[0]
+}
+
+// rigBeadsRoot returns the rig root directory for beads queries.
+// For rig-level agents (polecats, crew, witness, refinery), this is the rig
+// directory (e.g., ~/gt/gastown/) which has the authoritative .beads/ database.
+// For town-level agents, returns ctx.WorkDir as-is.
+// This avoids relying on .beads/redirect in polecat worktrees (GH#2503).
+func rigBeadsRoot(ctx RoleContext) string {
+	if ctx.Rig != "" && ctx.TownRoot != "" {
+		return filepath.Join(ctx.TownRoot, ctx.Rig)
+	}
+	return ctx.WorkDir
 }
 
 // outputAutonomousDirective displays the AUTONOMOUS WORK MODE header and instructions.

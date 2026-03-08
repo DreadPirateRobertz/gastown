@@ -236,11 +236,15 @@ func detectSessionState(ctx RoleContext) SessionState {
 
 	// Check for hooked work (autonomous state).
 	// Primary: read hook_bead from the agent bead's DB column (same strategy as gt hook).
-	// Fallback: query hooked/in_progress beads by assignee.
+	// Fallback: query hooked/in_progress beads by assignee from rig root.
 	agentID := getAgentIdentity(ctx)
 	if agentID != "" {
-		b := beads.New(ctx.WorkDir)
-		// Primary: agent bead's hook_bead field (authoritative, set by bd slot set during sling)
+		// Use rig root for beads queries instead of ctx.WorkDir to avoid
+		// polecat worktree redirect issues (GH#2503).
+		b := beads.New(rigBeadsRoot(ctx))
+		// Primary: agent bead's hook_bead field.
+		// NOTE: updateAgentHookBead is a no-op since hq-l6mm5, so HookBead
+		// is typically empty. Kept for backward compat.
 		agentBeadID := buildAgentBeadID(agentID, ctx.Role, ctx.TownRoot)
 		if agentBeadID != "" {
 			agentBeadDir := beads.ResolveHookDir(ctx.TownRoot, agentBeadID, ctx.WorkDir)
