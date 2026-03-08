@@ -108,6 +108,7 @@
 {"issue_id":"gt-gastown-crew-tom","label":"gt:agent"}
 {"issue_id":"gt-gastown-crew-zhora","label":"gt:agent"}
 {"issue_id":"gt-gastown-crew-zhora","label":"gt:agent"}
+{"issue_id":"gt-gastown-polecat-Toast","label":"gt:agent"}
 {"issue_id":"gt-gastown-polecat-ace","label":"gt:agent"}
 {"issue_id":"gt-gastown-polecat-angharad","label":"gt:agent"}
 {"issue_id":"gt-gastown-polecat-blackfinger","label":"gt:agent"}
@@ -363,6 +364,7 @@
 {"issue_id":"gt-wisp-w6o6","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-wn9t5","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-wslq","label":"gt:merge-request"}
+{"issue_id":"gt-wisp-wzps8","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-x28g0","label":"gt:merge-request"}
 {"issue_id":"gt-wisp-xerz1","label":"idle:1"}
 {"issue_id":"gt-wisp-xo0g1","label":"backoff-until:1772896987"}
