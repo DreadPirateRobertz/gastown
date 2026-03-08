@@ -1,6 +1,8 @@
 package reaper
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -76,6 +78,99 @@ func TestParentExcludeJoin(t *testing.T) {
 	}
 	if !contains(whereCondition, "IS NULL") {
 		t.Error("parentExcludeJoin whereCondition should use IS NULL for anti-join")
+	}
+}
+
+func TestScanDoltDataDir(t *testing.T) {
+	// Create a fake town root with .dolt-data directory
+	townRoot := t.TempDir()
+	dataDir := filepath.Join(townRoot, ".dolt-data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create valid database directories with .dolt/noms/manifest
+	for _, dbName := range []string{"hq", "gastown", "beads", "wyvern", "sky"} {
+		manifestDir := filepath.Join(dataDir, dbName, ".dolt", "noms")
+		if err := os.MkdirAll(manifestDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(manifestDir, "manifest"), []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create a test pollution database (should be filtered)
+	testDBDir := filepath.Join(dataDir, "testdb_abc", ".dolt", "noms")
+	if err := os.MkdirAll(testDBDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(testDBDir, "manifest"), []byte("test"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a directory without .dolt/noms/manifest (should be skipped)
+	if err := os.MkdirAll(filepath.Join(dataDir, "incomplete"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	dbs := scanDoltDataDir(townRoot)
+	if len(dbs) != 5 {
+		t.Errorf("expected 5 databases, got %d: %v", len(dbs), dbs)
+	}
+
+	// Verify test pollution was filtered
+	for _, db := range dbs {
+		if db == "testdb_abc" {
+			t.Error("test pollution database should be filtered out")
+		}
+		if db == "incomplete" {
+			t.Error("incomplete database should be filtered out")
+		}
+	}
+}
+
+func TestScanDoltDataDir_EmptyTownRoot(t *testing.T) {
+	dbs := scanDoltDataDir("")
+	if dbs != nil {
+		t.Errorf("expected nil for empty townRoot, got %v", dbs)
+	}
+}
+
+func TestScanDoltDataDir_MissingDir(t *testing.T) {
+	dbs := scanDoltDataDir("/nonexistent/path")
+	if dbs != nil {
+		t.Errorf("expected nil for missing dir, got %v", dbs)
+	}
+}
+
+func TestDiscoverDatabasesFromDir_FallbackToSQL(t *testing.T) {
+	// With empty townRoot, should fall back to SQL discovery (which will
+	// fail to connect and return DefaultDatabases)
+	dbs := DiscoverDatabasesFromDir("", "127.0.0.1", 1)
+	if len(dbs) == 0 {
+		t.Error("should return at least DefaultDatabases as fallback")
+	}
+}
+
+func TestDiscoverDatabasesFromDir_FilesystemFirst(t *testing.T) {
+	// Create a fake town root with databases
+	townRoot := t.TempDir()
+	dataDir := filepath.Join(townRoot, ".dolt-data")
+	for _, dbName := range []string{"myrig", "otherrig"} {
+		manifestDir := filepath.Join(dataDir, dbName, ".dolt", "noms")
+		if err := os.MkdirAll(manifestDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(manifestDir, "manifest"), []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Should find databases via filesystem, not SQL (port 1 will fail)
+	dbs := DiscoverDatabasesFromDir(townRoot, "127.0.0.1", 1)
+	if len(dbs) != 2 {
+		t.Errorf("expected 2 databases from filesystem, got %d: %v", len(dbs), dbs)
 	}
 }
 

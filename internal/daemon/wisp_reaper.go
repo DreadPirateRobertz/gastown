@@ -142,7 +142,7 @@ func (d *Daemon) reapWispsInline(config *WispReaperConfig, maxAge, deleteAge tim
 
 	databases := config.Databases
 	if len(databases) == 0 {
-		databases = reaper.DiscoverDatabases(host, port)
+		databases = reaper.DiscoverDatabasesFromDir(d.config.TownRoot, host, port)
 	}
 	if len(databases) == 0 {
 		d.logger.Printf("wisp_reaper: no databases to reap")
