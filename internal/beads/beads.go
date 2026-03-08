@@ -603,6 +603,87 @@ func isJSONBytes(b []byte) bool {
 	return false
 }
 
+// ListMergeRequests returns merge-request beads from both the issues table
+// and the wisps table. MRs are created as ephemeral (wisps) by gt mq submit,
+// but bd list may not return wisps on all bd versions. This method queries
+// the wisps table directly via SQL as a fallback to ensure MRs are always found.
+// See GH#2446.
+func (b *Beads) ListMergeRequests(opts ListOptions) ([]*Issue, error) {
+	// 1. Query via bd list (works on newer bd versions that include wisps)
+	issueResults, err := b.List(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build dedup set
+	seen := make(map[string]bool, len(issueResults))
+	for _, issue := range issueResults {
+		seen[issue.ID] = true
+	}
+
+	// 2. Query wisps table directly via SQL as fallback
+	statusFilter := "w.status = 'open'"
+	if opts.Status != "" && strings.EqualFold(opts.Status, "all") {
+		statusFilter = "1=1"
+	} else if opts.Status != "" {
+		statusFilter = fmt.Sprintf("w.status = '%s'",
+			strings.ReplaceAll(strings.ToLower(opts.Status), "'", "''"))
+	}
+
+	query := fmt.Sprintf(
+		"SELECT w.id, w.title, w.description, w.status, w.priority, w.assignee, "+
+			"w.created_at, w.updated_at, w.created_by, "+
+			"GROUP_CONCAT(al.label) as labels_csv "+
+			"FROM wisps w "+
+			"JOIN wisp_labels l ON w.id = l.issue_id "+
+			"LEFT JOIN wisp_labels al ON w.id = al.issue_id "+
+			"WHERE l.label = 'gt:merge-request' AND %s "+
+			"GROUP BY w.id, w.title, w.description, w.status, w.priority, "+
+			"w.assignee, w.created_at, w.updated_at, w.created_by",
+		statusFilter)
+
+	sqlOut, sqlErr := b.run("sql", "--json", query)
+	if sqlErr == nil && len(sqlOut) > 0 && isJSONBytes(sqlOut) {
+		var rows []struct {
+			ID          string `json:"id"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			Status      string `json:"status"`
+			Priority    int    `json:"priority"`
+			Assignee    string `json:"assignee"`
+			CreatedAt   string `json:"created_at"`
+			UpdatedAt   string `json:"updated_at"`
+			CreatedBy   string `json:"created_by"`
+			LabelsCSV   string `json:"labels_csv"`
+		}
+		if jsonErr := json.Unmarshal(sqlOut, &rows); jsonErr == nil {
+			for _, row := range rows {
+				if seen[row.ID] {
+					continue
+				}
+				issue := &Issue{
+					ID:          row.ID,
+					Title:       row.Title,
+					Description: row.Description,
+					Status:      row.Status,
+					Priority:    row.Priority,
+					Assignee:    row.Assignee,
+					CreatedAt:   row.CreatedAt,
+					UpdatedAt:   row.UpdatedAt,
+					CreatedBy:   row.CreatedBy,
+					Ephemeral:   true,
+				}
+				if row.LabelsCSV != "" {
+					issue.Labels = strings.Split(row.LabelsCSV, ",")
+				}
+				issueResults = append(issueResults, issue)
+			}
+		}
+	}
+
+	return issueResults, nil
+}
+
 // ListByAssignee returns all issues assigned to a specific assignee.
 // The assignee is typically in the format "rig/polecats/polecatName" (e.g., "gastown/polecats/Toast").
 func (b *Beads) ListByAssignee(assignee string) ([]*Issue, error) {
