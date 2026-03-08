@@ -262,6 +262,7 @@ type beadFieldUpdates struct {
 	ConvoyID         string // Convoy bead ID (e.g., "hq-cv-abc")
 	MergeStrategy    string // Convoy merge strategy: "direct", "mr", "local"
 	ConvoyOwned      bool   // Convoy has gt:owned label (caller-managed lifecycle)
+	Vars             string // Formula vars (semicolon-separated key=value pairs from --var)
 }
 
 // storeFieldsInBead performs a single read-modify-write to update all attachment fields
@@ -332,6 +333,9 @@ func storeFieldsInBead(beadID string, updates beadFieldUpdates) error {
 	}
 	if updates.ConvoyOwned {
 		fields.ConvoyOwned = true
+	}
+	if updates.Vars != "" {
+		fields.AttachedVars = updates.Vars
 	}
 
 	// Write back once

@@ -613,6 +613,15 @@ func outputAttachmentStatus(ctx RoleContext) {
 		fmt.Printf("%s\n", style.Bold.Render("📋 ARGS (use these to guide execution):"))
 		fmt.Printf("  %s\n", attachment.AttachedArgs)
 	}
+	if attachment.AttachedVars != "" {
+		fmt.Println()
+		fmt.Printf("%s\n", style.Bold.Render("📋 VARS (formula inputs):"))
+		for _, v := range strings.Split(attachment.AttachedVars, ";") {
+			if v = strings.TrimSpace(v); v != "" {
+				fmt.Printf("  %s\n", v)
+			}
+		}
+	}
 	fmt.Println()
 
 	// Show inline formula steps if formula name is known, else fall back to bd mol current

@@ -982,6 +982,39 @@ func TestAttachmentFieldsRoundTrip(t *testing.T) {
 	}
 }
 
+// TestAttachedVarsRoundTrip tests that attached_vars survives parse/format round-trip.
+func TestAttachedVarsRoundTrip(t *testing.T) {
+	original := &AttachmentFields{
+		AttachedFormula: "mol-release",
+		AttachedVars:    "version=1.2.3;channel=stable",
+		DispatchedBy:    "mayor",
+	}
+
+	formatted := FormatAttachmentFields(original)
+	if !strings.Contains(formatted, "attached_vars: version=1.2.3;channel=stable") {
+		t.Errorf("formatted output missing attached_vars:\n%s", formatted)
+	}
+
+	issue := &Issue{Description: formatted}
+	parsed := ParseAttachmentFields(issue)
+	if parsed == nil {
+		t.Fatal("round-trip parse returned nil")
+	}
+	if parsed.AttachedVars != original.AttachedVars {
+		t.Errorf("AttachedVars = %q, want %q", parsed.AttachedVars, original.AttachedVars)
+	}
+
+	// Test SetAttachmentFields preserves vars
+	newDesc := SetAttachmentFields(issue, original)
+	reparsed := ParseAttachmentFields(&Issue{Description: newDesc})
+	if reparsed == nil {
+		t.Fatal("re-parse after SetAttachmentFields returned nil")
+	}
+	if reparsed.AttachedVars != original.AttachedVars {
+		t.Errorf("after SetAttachmentFields: AttachedVars = %q, want %q", reparsed.AttachedVars, original.AttachedVars)
+	}
+}
+
 // TestNoMergeField tests the no_merge field in AttachmentFields.
 // The no_merge flag tells gt done to skip the merge queue and keep work on a feature branch.
 func TestNoMergeField(t *testing.T) {

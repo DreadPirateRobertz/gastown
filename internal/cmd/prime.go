@@ -749,6 +749,14 @@ func outputMoleculeWorkflow(ctx RoleContext, attachment *beads.AttachmentFields)
 		fmt.Printf("\n%s\n", style.Bold.Render("📋 ARGS (use these to guide execution):"))
 		fmt.Printf("  %s\n", attachment.AttachedArgs)
 	}
+	if attachment.AttachedVars != "" {
+		fmt.Printf("\n%s\n", style.Bold.Render("📋 VARS (formula inputs):"))
+		for _, v := range strings.Split(attachment.AttachedVars, ";") {
+			if v = strings.TrimSpace(v); v != "" {
+				fmt.Printf("  %s\n", v)
+			}
+		}
+	}
 	fmt.Println()
 
 	// Ralph loop mode: output Ralph Wiggum loop command instead of step-by-step execution
@@ -804,6 +812,9 @@ func buildRalphPromptFromMolecule(attachment *beads.AttachmentFields) string {
 	b.WriteString("Execute the attached molecule workflow. ")
 	if attachment.AttachedArgs != "" {
 		b.WriteString("Context: " + attachment.AttachedArgs + ". ")
+	}
+	if attachment.AttachedVars != "" {
+		b.WriteString("Formula vars: " + attachment.AttachedVars + ". ")
 	}
 	b.WriteString("Work through steps in order, committing after each. ")
 	b.WriteString("When all steps complete, output POLECAT_DONE.")

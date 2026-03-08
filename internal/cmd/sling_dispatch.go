@@ -335,6 +335,7 @@ func executeSling(params SlingParams) (*SlingResult, error) {
 		AttachedFormula:  params.FormulaName,
 		NoMerge:          params.NoMerge,
 		Mode:             params.Mode,
+		Vars:             strings.Join(params.Vars, ";"),
 	}
 	// Use beadToHook for the update target (may differ from beadID when formula-on-bead)
 	if err := storeFieldsInBead(beadToHook, fieldUpdates); err != nil {

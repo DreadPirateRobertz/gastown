@@ -128,6 +128,7 @@ type MoleculeStatusInfo struct {
 	AttachedMolecule string                `json:"attached_molecule,omitempty"`
 	AttachedAt       string                `json:"attached_at,omitempty"`
 	AttachedArgs     string                `json:"attached_args,omitempty"`
+	AttachedVars     string                `json:"attached_vars,omitempty"`
 	IsWisp           bool                  `json:"is_wisp"`
 	Progress         *MoleculeProgressInfo `json:"progress,omitempty"`
 	NextAction       string                `json:"next_action,omitempty"`
@@ -477,6 +478,7 @@ func runMoleculeStatus(cmd *cobra.Command, args []string) error {
 			status.AttachedMolecule = attachment.AttachedMolecule
 			status.AttachedAt = attachment.AttachedAt
 			status.AttachedArgs = attachment.AttachedArgs
+			status.AttachedVars = attachment.AttachedVars
 
 			// Check if it's a wisp
 			status.IsWisp = strings.Contains(hookBead.Description, "wisp: true") ||
@@ -738,6 +740,9 @@ func outputMoleculeStatus(status MoleculeStatusInfo) error {
 		}
 		if status.AttachedArgs != "" {
 			fmt.Printf("   %s %s\n", style.Bold.Render("Args:"), status.AttachedArgs)
+		}
+		if status.AttachedVars != "" {
+			fmt.Printf("   %s %s\n", style.Bold.Render("Vars:"), status.AttachedVars)
 		}
 	} else {
 		fmt.Printf("%s\n", style.Dim.Render("No molecule attached (hooked bead still triggers autonomous work)"))
