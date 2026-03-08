@@ -11,6 +11,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -35,7 +37,80 @@ func isNothingToCommit(err error) bool {
 // DiscoverDatabases queries SHOW DATABASES on the Dolt server and returns
 // all production databases, filtering out system databases and test pollution.
 // Falls back to DefaultDatabases on any error.
+//
+// Deprecated: Use DiscoverDatabasesFromDir when a town root is available.
+// This function only queries a single Dolt server, missing databases on
+// per-rig servers. DiscoverDatabasesFromDir scans the filesystem first,
+// then falls back to SHOW DATABASES, covering all databases regardless
+// of which server hosts them.
 func DiscoverDatabases(host string, port int) []string {
+	return discoverDatabasesSQL(host, port)
+}
+
+// DiscoverDatabasesFromDir discovers production databases by scanning the
+// Dolt data directory on the filesystem, then falling back to SHOW DATABASES
+// on the configured server. This handles the case where bd runs per-rig Dolt
+// servers — the filesystem scan sees all databases regardless of which server
+// is running.
+//
+// townRoot is the Gas Town root directory (e.g., ~/gt). If empty, falls back
+// to the SQL-only discovery path.
+func DiscoverDatabasesFromDir(townRoot string, host string, port int) []string {
+	if townRoot != "" {
+		dbs := scanDoltDataDir(townRoot)
+		if len(dbs) > 0 {
+			return dbs
+		}
+	}
+	return discoverDatabasesSQL(host, port)
+}
+
+// scanDoltDataDir scans the .dolt-data/ directory for valid Dolt databases.
+// Returns nil if the directory doesn't exist or contains no valid databases.
+func scanDoltDataDir(townRoot string) []string {
+	dataDir := filepath.Join(townRoot, ".dolt-data")
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		return nil
+	}
+
+	var databases []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !validDBName.MatchString(name) {
+			continue
+		}
+
+		// Skip test pollution
+		lower := strings.ToLower(name)
+		skip := false
+		for _, prefix := range testPollutionPrefixes {
+			if strings.HasPrefix(lower, prefix) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
+		// Verify it's a valid Dolt database (has .dolt/noms/manifest)
+		manifest := filepath.Join(dataDir, name, ".dolt", "noms", "manifest")
+		if _, err := os.Stat(manifest); err != nil {
+			continue
+		}
+
+		databases = append(databases, name)
+	}
+	return databases
+}
+
+// discoverDatabasesSQL queries SHOW DATABASES on a single Dolt server.
+// Falls back to DefaultDatabases on any error.
+func discoverDatabasesSQL(host string, port int) []string {
 	dsn := fmt.Sprintf("root@tcp(%s:%d)/?parseTime=true&timeout=5s", host, port)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
