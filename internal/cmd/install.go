@@ -625,6 +625,13 @@ func initTownBeads(townPath string) error {
 		return fmt.Errorf("ensuring custom types: %w", err)
 	}
 
+	// Configure custom statuses for Gas Town (staged_ready, staged_warnings).
+	// Convoy staging requires these statuses. Without them, gt doctor warns
+	// and convoy operations fail. (GH#2468)
+	if err := beads.EnsureCustomStatuses(beadsDir); err != nil {
+		return fmt.Errorf("ensuring custom statuses: %w", err)
+	}
+
 	// Configure allowed_prefixes for convoy beads (hq-cv-* IDs).
 	// This allows bd create --id=hq-cv-xxx to pass prefix validation.
 	prefixCmd := exec.Command("bd", "config", "set", "allowed_prefixes", "hq,hq-cv")
@@ -770,6 +777,7 @@ func ensureBeadsCustomTypes(workDir string, types []string) error {
 
 	cmd := exec.Command("bd", "config", "set", "types.custom", strings.Join(types, ","))
 	cmd.Dir = workDir
+	cmd.Env = withBeadsDirEnv(filepath.Join(workDir, ".beads"))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("bd config set types.custom failed: %s", strings.TrimSpace(string(output)))
