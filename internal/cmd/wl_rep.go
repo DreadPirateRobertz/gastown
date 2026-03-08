@@ -77,10 +77,7 @@ func runWLRep(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	completionCount, err := queryCompletionCount(doltPath, cloneDir, handle)
-	if err != nil {
-		return err
-	}
+	completionCount := queryCompletionCount(doltPath, cloneDir, handle)
 
 	rep := wasteland.ComputeReputation(handle, stamps)
 
@@ -182,7 +179,7 @@ func queryStampsForRig(doltPath, cloneDir, handle string) ([]wasteland.Stamp, er
 	return stamps, nil
 }
 
-func queryCompletionCount(doltPath, cloneDir, handle string) (int, error) {
+func queryCompletionCount(doltPath, cloneDir, handle string) int {
 	query := fmt.Sprintf(
 		`SELECT COUNT(*) as cnt FROM completions WHERE completed_by = '%s'`,
 		escapeSQLArg(handle))
@@ -191,16 +188,16 @@ func queryCompletionCount(doltPath, cloneDir, handle string) (int, error) {
 	sqlCmd.Dir = cloneDir
 	output, err := sqlCmd.Output()
 	if err != nil {
-		return 0, nil // non-fatal
+		return 0 // non-fatal
 	}
 
 	rows := wlParseCSV(string(output))
 	if len(rows) >= 2 && len(rows[1]) >= 1 {
 		var count int
 		fmt.Sscanf(rows[1][0], "%d", &count)
-		return count, nil
+		return count
 	}
-	return 0, nil
+	return 0
 }
 
 func escapeSQLArg(s string) string {
