@@ -104,6 +104,8 @@ type Issue struct {
 
 	// Content fields (parsed from bd show --json)
 	AcceptanceCriteria string `json:"acceptance_criteria,omitempty"`
+	Notes              string `json:"notes,omitempty"`
+	Design             string `json:"design,omitempty"`
 
 	// Agent bead slots (type=agent only)
 	HookBead   string `json:"hook_bead,omitempty"`   // Current work attached to agent's hook
@@ -144,6 +146,16 @@ func HasUncheckedCriteria(issue *Issue) int {
 		}
 	}
 	return count
+}
+
+// HasFindings checks if an issue has substantive notes or design content.
+// Used to verify that report-only tasks actually produced work before allowing
+// zero-commit completion (gt-qdgj5).
+func HasFindings(issue *Issue) bool {
+	if issue == nil {
+		return false
+	}
+	return strings.TrimSpace(issue.Notes) != "" || strings.TrimSpace(issue.Design) != ""
 }
 
 // IsAgentBead checks if an issue is an agent bead by checking for the gt:agent

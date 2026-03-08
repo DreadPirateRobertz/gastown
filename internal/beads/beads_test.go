@@ -2890,3 +2890,27 @@ func TestIsSubprocessCrash(t *testing.T) {
 		})
 	}
 }
+
+// TestHasFindings verifies that HasFindings correctly detects notes/design content (gt-qdgj5).
+func TestHasFindings(t *testing.T) {
+	tests := []struct {
+		name   string
+		issue  *Issue
+		expect bool
+	}{
+		{"nil issue", nil, false},
+		{"empty issue", &Issue{}, false},
+		{"whitespace-only notes", &Issue{Notes: "   \n\t  "}, false},
+		{"whitespace-only design", &Issue{Design: "  \n "}, false},
+		{"has notes", &Issue{Notes: "Found the root cause in auth.go"}, true},
+		{"has design", &Issue{Design: "## Analysis\nThe system is correct."}, true},
+		{"has both", &Issue{Notes: "notes", Design: "design"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasFindings(tt.issue); got != tt.expect {
+				t.Errorf("HasFindings() = %v, want %v", got, tt.expect)
+			}
+		})
+	}
+}

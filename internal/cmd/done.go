@@ -244,6 +244,12 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 		}
 	}
 
+	// Track whether --cleanup-status was explicitly provided vs auto-detected.
+	// Only explicit --cleanup-status=clean can bypass the polecat zero-commit check.
+	// Auto-detected "clean" must NOT bypass it — that's how sleepwalking polecats
+	// auto-close beads without doing work (gt-qdgj5).
+	cleanupStatusExplicit := doneCleanupStatus != ""
+
 	// Auto-detect cleanup status if not explicitly provided
 	// This prevents premature polecat cleanup by ensuring witness knows git state
 	if doneCleanupStatus == "" {
@@ -422,18 +428,56 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 
 		// If no commits ahead, work was likely pushed directly to main (or already merged)
 		// For polecats, zero commits usually means the polecat sleepwalked through
-		// implementation without writing code (gastown#1484, beads#emma).
-		// The --cleanup-status=clean escape is preserved for legitimate report-only
-		// tasks (audits, reviews) that the formula explicitly directs to use it.
+		// implementation without writing code (gastown#1484, beads#emma, gt-qdgj5).
+		//
+		// Three cases for polecats with zero commits:
+		// 1. Auto-detected cleanup status (any value): BLOCK. Auto-detected "clean"
+		//    means the branch has no changes — not that the polecat did report-only work.
+		//    This was the original bypass bug: BranchPushedToRemote returns (true, 0)
+		//    for branches with 0 commits ahead of main, auto-detecting "clean".
+		// 2. Explicit --cleanup-status=clean WITHOUT findings: BLOCK. The polecat used
+		//    the flag but didn't persist any notes/design to the bead.
+		// 3. Explicit --cleanup-status=clean WITH findings: ALLOW. Legitimate report-only
+		//    task with work product persisted to the bead.
+		//
 		// IMPORTANT: The error message must NOT mention --cleanup-status=clean.
 		// LLM agents read error messages and self-bypass (the original bug).
 		if aheadCount == 0 {
-			if os.Getenv("GT_POLECAT") != "" && doneCleanupStatus != "clean" {
-				return fmt.Errorf("cannot complete: no commits on branch ahead of %s\n"+
-					"Polecats must have at least 1 commit to submit.\n"+
-					"If the bug was already fixed upstream: gt done --status DEFERRED\n"+
-					"If you're blocked: gt done --status ESCALATED",
-					originDefault)
+			isPolecat := os.Getenv("GT_POLECAT") != ""
+
+			if isPolecat {
+				// Case 1: Auto-detected cleanup status — always block
+				if !cleanupStatusExplicit {
+					return fmt.Errorf("cannot complete: no commits on branch ahead of %s\n"+
+						"Polecats must have at least 1 commit to submit.\n"+
+						"If the bug was already fixed upstream: gt done --status DEFERRED\n"+
+						"If you're blocked: gt done --status ESCALATED",
+						originDefault)
+				}
+
+				// Case 2 & 3: Explicit --cleanup-status=clean — check for findings
+				if doneCleanupStatus == "clean" && issueID != "" {
+					bd := beads.New(cwd)
+					if issue, err := bd.Show(issueID); err == nil {
+						if !beads.HasFindings(issue) {
+							return fmt.Errorf("cannot complete: no commits and no findings persisted to %s\n"+
+								"Report-only tasks must persist findings before completing:\n"+
+								"  bd update %s --notes \"<your findings>\"\n"+
+								"  bd update %s --design \"<your analysis>\"\n"+
+								"If the bug was already fixed upstream: gt done --status DEFERRED\n"+
+								"If you're blocked: gt done --status ESCALATED",
+								issueID, issueID, issueID)
+						}
+					}
+					// If bd.Show fails, allow through — don't block on beads outage
+				} else if doneCleanupStatus != "clean" {
+					// Explicit non-clean status with zero commits — block
+					return fmt.Errorf("cannot complete: no commits on branch ahead of %s\n"+
+						"Polecats must have at least 1 commit to submit.\n"+
+						"If the bug was already fixed upstream: gt done --status DEFERRED\n"+
+						"If you're blocked: gt done --status ESCALATED",
+						originDefault)
+				}
 			}
 
 			// Non-polecat (crew/mayor) or polecat with --cleanup-status=clean
