@@ -60,7 +60,7 @@ func wispReaperMaxAge(config *DaemonPatrolConfig) time.Duration {
 	return defaultWispMaxAge
 }
 
-// wispDeleteAge returns the configured delete age, or the default (7 days).
+// wispDeleteAge returns the configured delete age, or the default (3 days).
 func wispDeleteAge(config *DaemonPatrolConfig) time.Duration {
 	if config != nil && config.Patrols != nil && config.Patrols.WispReaper != nil {
 		if config.Patrols.WispReaper.DeleteAgeStr != "" {
@@ -230,7 +230,7 @@ func (d *Daemon) reapWispsInline(config *WispReaperConfig, maxAge, deleteAge tim
 		mol.closeStep("auto-close")
 	}
 
-	// Step 5: Report
+	// Report
 	if totalOpen > wispAlertThreshold {
 		d.logger.Printf("wisp_reaper: WARNING: %d open wisps exceed threshold %d — investigate wisp lifecycle",
 			totalOpen, wispAlertThreshold)

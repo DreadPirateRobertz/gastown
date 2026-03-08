@@ -60,7 +60,7 @@ func ClassifySchemaChange(local, upstream string) (SchemaChangeKind, error) {
 
 // readDoltSchemaVersion reads schema_version from the _meta table of a local
 // dolt fork. asOf specifies the branch/ref (e.g. "HEAD" or "upstream/main").
-// Returns ("", nil) when the _meta table or schema_version row does not exist.
+// Returns "" when the _meta table or schema_version row does not exist.
 func readDoltSchemaVersion(doltPath, forkDir, asOf string) string {
 	var query string
 	if asOf == "" || asOf == "HEAD" {
@@ -96,7 +96,7 @@ func readDoltSchemaVersion(doltPath, forkDir, asOf string) string {
 // Precondition: caller has already run `dolt fetch upstream` so that
 // upstream/main is available for AS OF queries.
 //
-// Returns (false, nil) when the fork lacks a _meta table or schema_version row
+// Returns nil when the fork lacks a _meta table or schema_version row
 // (pre-versioned fork) — the pull proceeds without interruption.
 func checkSchemaEvolution(doltPath, forkDir string, upgrade bool) error {
 	localVer := readDoltSchemaVersion(doltPath, forkDir, "HEAD")
