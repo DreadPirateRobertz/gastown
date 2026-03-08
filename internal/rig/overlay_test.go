@@ -350,6 +350,9 @@ func TestEnsureGitignorePatterns_SkipsExistingPatterns(t *testing.T) {
 	if !containsLine(string(content), "__pycache__/") {
 		t.Error(".gitignore missing pattern __pycache__/")
 	}
+	if !containsLine(string(content), "state.json") {
+		t.Error(".gitignore missing pattern state.json")
+	}
 
 	// Regression guard: .beads/ must NOT be in required patterns.
 	// Beads manages its own .beads/.gitignore via bd init.
