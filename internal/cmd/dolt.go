@@ -757,6 +757,7 @@ func runDoltSQL(cmd *cobra.Command, args []string) error {
 			host = "127.0.0.1"
 		}
 		sqlArgs := []string{
+			"--doltcfg-dir", config.CfgDir(),
 			"--host", host,
 			"--port", strconv.Itoa(config.Port),
 			"--user", config.User,

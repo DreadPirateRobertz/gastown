@@ -3140,6 +3140,18 @@ func TestFindOrphanedDatabases_EndToEnd(t *testing.T) {
 }
 
 // =============================================================================
+// Config helper tests
+// =============================================================================
+
+func TestCfgDir(t *testing.T) {
+	c := &Config{DataDir: "/home/user/.dolt-data"}
+	want := "/home/user/.dolt-data/.doltcfg"
+	if got := c.CfgDir(); got != want {
+		t.Errorf("CfgDir() = %q, want %q", got, want)
+	}
+}
+
+// =============================================================================
 // Remote Dolt server config tests
 // =============================================================================
 
@@ -3698,6 +3710,7 @@ func TestWriteServerConfig_Defaults(t *testing.T) {
 		fmt.Sprintf("read_timeout_millis: %d", DefaultReadTimeoutMs),
 		fmt.Sprintf("write_timeout_millis: %d", DefaultWriteTimeoutMs),
 		"data_dir: \"" + dir + "\"",
+		"cfg_dir: \"" + filepath.Join(dir, ".doltcfg") + "\"",
 		"log_level: warning",
 		"auto_gc_behavior:",
 	}

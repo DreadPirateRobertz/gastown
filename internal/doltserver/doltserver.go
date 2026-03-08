@@ -360,6 +360,13 @@ func (c *Config) EffectiveHost() string {
 	return c.Host
 }
 
+// CfgDir returns the canonical .doltcfg directory path within the data dir.
+// Passing --doltcfg-dir to dolt CLI commands prevents stray .doltcfg/privileges.db
+// files from being created in the working directory (see GH#2537).
+func (c *Config) CfgDir() string {
+	return filepath.Join(c.DataDir, ".doltcfg")
+}
+
 // HostPort returns "host:port", defaulting host to "127.0.0.1" when empty.
 func (c *Config) HostPort() string {
 	host := c.Host
@@ -372,10 +379,11 @@ func (c *Config) HostPort() string {
 // buildDoltSQLCmd constructs a dolt sql command that works for both local and remote servers.
 // For local: runs from config.DataDir so dolt auto-detects the running server.
 // For remote: prepends connection flags and passes password via DOLT_CLI_PASSWORD env var.
+// Always passes --doltcfg-dir to prevent stray .doltcfg/privileges.db creation (GH#2537).
 func buildDoltSQLCmd(ctx context.Context, config *Config, args ...string) *exec.Cmd {
 	sqlArgs := config.SQLArgs()
-	fullArgs := make([]string, 0, len(sqlArgs)+1+len(args))
-	fullArgs = append(fullArgs, "sql")
+	fullArgs := make([]string, 0, len(sqlArgs)+3+len(args))
+	fullArgs = append(fullArgs, "--doltcfg-dir", config.CfgDir(), "sql")
 	fullArgs = append(fullArgs, sqlArgs...)
 	fullArgs = append(fullArgs, args...)
 
@@ -1039,6 +1047,7 @@ listener:
   port: %d%s%s%s%s
 
 data_dir: "%s"
+cfg_dir: "%s"
 
 behavior:
   dolt_transaction_commit: true
@@ -1053,6 +1062,7 @@ behavior:
 		readTimeoutLine,
 		writeTimeoutLine,
 		config.DataDir,
+		config.CfgDir(),
 	)
 
 	return os.WriteFile(configPath, []byte(content), 0600)
@@ -1230,6 +1240,7 @@ func Start(townRoot string) error {
 	}
 	args := []string{"sql-server", "--config", configPath}
 	cmd := exec.Command("dolt", args...)
+	cmd.Dir = config.DataDir // Prevent stray .doltcfg creation (GH#2537)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
@@ -2668,9 +2679,11 @@ func GetActiveConnectionCount(townRoot string) (int, error) {
 	// Always connect as a TCP client to the running server, even for local servers.
 	// Without explicit --host/--port, dolt sql runs in embedded mode which loads all
 	// databases into memory — causing OOM kills on large data dirs.
-	// Note: --host, --port, --user, --no-tls are dolt GLOBAL args and must come
-	// BEFORE the "sql" subcommand.
+	// Note: --host, --port, --user, --no-tls, --doltcfg-dir are dolt GLOBAL args
+	// and must come BEFORE the "sql" subcommand.
+	// --doltcfg-dir prevents stray .doltcfg/privileges.db creation (GH#2537).
 	fullArgs := []string{
+		"--doltcfg-dir", config.CfgDir(),
 		"--host", config.EffectiveHost(),
 		"--port", strconv.Itoa(config.Port),
 		"--user", config.User,

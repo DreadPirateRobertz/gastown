@@ -228,9 +228,11 @@ func (m *DoltServerManager) isRemote() bool {
 
 // buildDoltSQLCmd constructs a dolt sql command using daemon config, mirroring
 // the doltserver.buildDoltSQLCmd pattern for local-vs-remote command construction.
+// Always passes --doltcfg-dir to prevent stray .doltcfg/privileges.db creation (GH#2537).
 func (m *DoltServerManager) buildDoltSQLCmd(ctx context.Context, args ...string) *exec.Cmd {
 	var fullArgs []string
-	fullArgs = append(fullArgs, "sql")
+	cfgDir := filepath.Join(m.config.DataDir, ".doltcfg")
+	fullArgs = append(fullArgs, "--doltcfg-dir", cfgDir, "sql")
 
 	if m.isRemote() {
 		host := m.config.Host
