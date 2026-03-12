@@ -690,29 +690,29 @@ func TestIsCompactResume(t *testing.T) {
 	}()
 
 	cases := []struct {
-		name           string
-		hookSource     string
-		handoffReason  string
-		wantCompact    bool
+		name          string
+		hookSource    string
+		handoffReason string
+		wantCompact   bool
 	}{
 		{
-			name:       "fresh_startup",
-			hookSource: "startup",
+			name:        "fresh_startup",
+			hookSource:  "startup",
 			wantCompact: false,
 		},
 		{
-			name:       "compact_source",
-			hookSource: "compact",
+			name:        "compact_source",
+			hookSource:  "compact",
 			wantCompact: true,
 		},
 		{
-			name:       "resume_source",
-			hookSource: "resume",
+			name:        "resume_source",
+			hookSource:  "resume",
 			wantCompact: true,
 		},
 		{
-			name:       "clear_source",
-			hookSource: "clear",
+			name:        "clear_source",
+			hookSource:  "clear",
 			wantCompact: false,
 		},
 		{
@@ -746,6 +746,40 @@ func TestIsCompactResume(t *testing.T) {
 					got, tc.wantCompact, tc.hookSource, tc.handoffReason)
 			}
 		})
+	}
+}
+
+func TestHookSessionBeaconLines(t *testing.T) {
+	origStructured := primeStructuredSessionStartOutput
+	defer func() {
+		primeStructuredSessionStartOutput = origStructured
+	}()
+
+	primeStructuredSessionStartOutput = false
+	lines := hookSessionBeaconLines("abc", "startup")
+	if len(lines) != 2 || lines[0] != "[session:abc]" || lines[1] != "[source:startup]" {
+		t.Fatalf("hookSessionBeaconLines() = %v", lines)
+	}
+
+	primeStructuredSessionStartOutput = true
+	lines = hookSessionBeaconLines("abc", "startup")
+	if len(lines) != 0 {
+		t.Fatalf("hookSessionBeaconLines() in structured mode = %v, want no beacon lines", lines)
+	}
+}
+
+func TestFormatSessionMetadataLine(t *testing.T) {
+	origStructured := primeStructuredSessionStartOutput
+	defer func() { primeStructuredSessionStartOutput = origStructured }()
+
+	primeStructuredSessionStartOutput = false
+	if got := formatSessionMetadataLine("crew/quick", "sess-1"); !strings.HasPrefix(got, "[GAS TOWN] ") {
+		t.Fatalf("formatSessionMetadataLine() = %q, want bracketed prefix", got)
+	}
+
+	primeStructuredSessionStartOutput = true
+	if got := formatSessionMetadataLine("crew/quick", "sess-1"); strings.HasPrefix(got, "[") {
+		t.Fatalf("formatSessionMetadataLine() structured = %q, should not start with '['", got)
 	}
 }
 

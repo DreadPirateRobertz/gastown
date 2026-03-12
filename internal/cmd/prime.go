@@ -29,6 +29,7 @@ var primeDryRun bool
 var primeState bool
 var primeStateJSON bool
 var primeExplain bool
+var primeStructuredSessionStartOutput bool
 
 // primeHookSource stores the SessionStart source ("startup", "resume", "clear", "compact")
 // when running in hook mode. Used to provide lighter output on compaction/resume.
@@ -292,10 +293,24 @@ func handlePrimeHookMode(townRoot, cwd string) {
 	primeHookSource = source
 
 	explain(true, "Session beacon: hook mode enabled, session ID from stdin")
-	fmt.Printf("[session:%s]\n", sessionID)
-	if source != "" {
-		fmt.Printf("[source:%s]\n", source)
+	for _, line := range hookSessionBeaconLines(sessionID, source) {
+		fmt.Println(line)
 	}
+}
+
+// hookSessionBeaconLines returns the bracketed session/source markers used by
+// the normal hook path. Structured SessionStart output skips them because Codex
+// tries to auto-detect JSON, sees the leading '[', and misclassifies the startup
+// stream as JSON instead of plain text metadata.
+func hookSessionBeaconLines(sessionID, source string) []string {
+	if primeStructuredSessionStartOutput {
+		return nil
+	}
+	lines := []string{fmt.Sprintf("[session:%s]", sessionID)}
+	if source != "" {
+		lines = append(lines, fmt.Sprintf("[source:%s]", source))
+	}
+	return lines
 }
 
 // signalAgentReady sets GT_AGENT_READY=1 in the current tmux session environment.
