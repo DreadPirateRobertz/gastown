@@ -40,7 +40,15 @@ func (p *Proxy) terminateProcess() {
 		debugLog(p.townRoot, "[Proxy] Shutdown: sending SIGTERM to agent process (pid=%d)", p.cmd.Process.Pid)
 		pgid, err := syscall.Getpgid(p.cmd.Process.Pid)
 		if err == nil {
-			_ = syscall.Kill(-pgid, syscall.SIGTERM)
+			// SAFETY: Never kill our own process group during tests/local runs
+			myPgid, _ := syscall.Getpgid(0)
+			if pgid != myPgid {
+				// Send SIGTERM to the entire process group
+				_ = syscall.Kill(-pgid, syscall.SIGTERM)
+			} else {
+				// Only kill the process itself if it shares our group
+				_ = syscall.Kill(p.cmd.Process.Pid, syscall.SIGTERM)
+			}
 		} else {
 			_ = syscall.Kill(p.cmd.Process.Pid, syscall.SIGTERM)
 		}
@@ -50,7 +58,8 @@ func (p *Proxy) terminateProcess() {
 				if pgid == 0 {
 					pgid, _ = syscall.Getpgid(p.cmd.Process.Pid)
 				}
-				if pgid > 0 {
+				myPgid, _ := syscall.Getpgid(0)
+				if pgid > 0 && pgid != myPgid {
 					_ = syscall.Kill(-pgid, syscall.SIGKILL)
 				} else {
 					_ = syscall.Kill(p.cmd.Process.Pid, syscall.SIGKILL)
