@@ -24,19 +24,32 @@ and orphaned dog sessions (tmux session exists but dog not in kennel).
 
 ## Step 1: Get valid rig prefixes
 
-Fetch the rig registry to know which session prefixes are legitimate:
+Read `rigs.json` for valid rig names AND beads prefixes. **CRITICAL**: Do NOT use
+`gt rig list --json` which returns rig names only. Tmux sessions use the beads
+prefix (e.g., rig "cfutons" has prefix "CF", so sessions are "CF-witness" not
+"cfutons-witness"). Using rig names caused two mass-kill incidents (see #2707).
 
 ```bash
-RIG_JSON=$(gt rig list --json 2>/dev/null)
-if [ $? -ne 0 ] || [ -z "$RIG_JSON" ]; then
-  echo "SKIP: could not get rig list"
+TOWN_ROOT="${GT_TOWN_ROOT:-$HOME/gt}"
+RIGS_JSON_PATH="$TOWN_ROOT/mayor/rigs.json"
+
+if [ ! -f "$RIGS_JSON_PATH" ]; then
+  echo "SKIP: rigs.json not found at $RIGS_JSON_PATH"
   exit 0
 fi
 
-# Extract rig names as valid prefixes
-VALID_PREFIXES=$(echo "$RIG_JSON" | jq -r '.[].name // empty' 2>/dev/null)
+RIGS_FILE=$(cat "$RIGS_JSON_PATH" 2>/dev/null)
+if [ -z "$RIGS_FILE" ]; then
+  echo "SKIP: could not read rigs.json"
+  exit 0
+fi
+
+# Extract BOTH rig names AND beads prefixes as valid session prefixes
+RIG_NAMES=$(echo "$RIGS_FILE" | jq -r '.rigs | keys[]' 2>/dev/null)
+BEADS_PREFIXES=$(echo "$RIGS_FILE" | jq -r '.rigs[].beads.prefix // empty' 2>/dev/null)
+VALID_PREFIXES=$(printf '%s\n%s' "$RIG_NAMES" "$BEADS_PREFIXES" | sort -u)
 if [ -z "$VALID_PREFIXES" ]; then
-  echo "SKIP: no rigs found in registry"
+  echo "SKIP: no rigs found in rigs.json"
   exit 0
 fi
 ```
@@ -88,7 +101,25 @@ while IFS= read -r SESSION; do
 done <<< "$SESSIONS"
 ```
 
-## Step 4: Kill zombie sessions
+## Step 4: Kill threshold safeguard
+
+If more than 50% of sessions would be killed, this is almost certainly a
+misconfiguration (wrong prefix matching), not actual zombies. Abort and escalate.
+
+```bash
+ZOMBIE_COUNT=${#ZOMBIES[@]}
+if [ "$ZOMBIE_COUNT" -gt 0 ] && [ "$SESSION_COUNT" -gt 0 ]; then
+  KILL_PERCENT=$(( ZOMBIE_COUNT * 100 / SESSION_COUNT ))
+  if [ "$KILL_PERCENT" -gt 50 ]; then
+    echo "ABORT: $ZOMBIE_COUNT of $SESSION_COUNT sessions (${KILL_PERCENT}%) flagged as zombies — likely misconfiguration"
+    echo "Zombies: ${ZOMBIES[*]}"
+    gt escalate -s HIGH "session-hygiene: ${KILL_PERCENT}% of sessions flagged as zombies ($ZOMBIE_COUNT/$SESSION_COUNT) — aborting cleanup" 2>/dev/null || true
+    exit 1
+  fi
+fi
+```
+
+## Step 5: Kill zombie sessions
 
 ```bash
 KILLED=0
@@ -98,7 +129,7 @@ for ZOMBIE in "${ZOMBIES[@]}"; do
 done
 ```
 
-## Step 5: Check for orphaned dog sessions
+## Step 6: Check for orphaned dog sessions
 
 Dog sessions follow the pattern `hq-dog-<name>`. Cross-reference against
 the kennel to find sessions for dogs that no longer exist:

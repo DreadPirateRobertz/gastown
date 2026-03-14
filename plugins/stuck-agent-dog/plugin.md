@@ -38,15 +38,25 @@ Gather all polecats and the deacon session. We check both crashed sessions
 echo "=== Stuck Agent Dog: Checking agent health ==="
 
 TOWN_ROOT="$HOME/gt"
+RIGS_JSON_PATH="$TOWN_ROOT/mayor/rigs.json"
 
-# Get all rig names
-RIG_JSON=$(gt rig list --json 2>/dev/null)
-if [ $? -ne 0 ] || [ -z "$RIG_JSON" ]; then
-  echo "SKIP: could not get rig list"
+# Read rigs.json for rig names and beads prefixes.
+# CRITICAL: We must use beads prefixes (not rig names) for session name
+# construction. Rig names and beads prefixes can differ (e.g. rig "cfutons"
+# has prefix "CF"). Tmux sessions use the beads prefix.
+# See: GitHub issue #2707
+if [ ! -f "$RIGS_JSON_PATH" ]; then
+  echo "SKIP: rigs.json not found at $RIGS_JSON_PATH"
   exit 0
 fi
 
-RIG_NAMES=$(echo "$RIG_JSON" | jq -r '.[].name // empty' 2>/dev/null)
+RIGS_FILE=$(cat "$RIGS_JSON_PATH" 2>/dev/null)
+if [ -z "$RIGS_FILE" ]; then
+  echo "SKIP: could not read rigs.json"
+  exit 0
+fi
+
+RIG_NAMES=$(echo "$RIGS_FILE" | jq -r '.rigs | keys[]' 2>/dev/null)
 ```
 
 ## Step 2: Check polecat health
@@ -62,6 +72,10 @@ STUCK=()
 HEALTHY=0
 
 for RIG in $RIG_NAMES; do
+  # Get beads prefix for this rig — tmux sessions use the prefix, not the rig name.
+  # e.g. rig "cfutons" has prefix "CF", so sessions are "CF-polecat-foo" not "cfutons-polecat-foo"
+  RIG_PREFIX=$(echo "$RIGS_FILE" | jq -r --arg rig "$RIG" '.rigs[$rig].beads.prefix // $rig' 2>/dev/null)
+
   # List polecat directories
   POLECAT_DIR="$TOWN_ROOT/$RIG/polecats"
   [ -d "$POLECAT_DIR" ] || continue
@@ -69,7 +83,7 @@ for RIG in $RIG_NAMES; do
   for PCAT_PATH in "$POLECAT_DIR"/*/; do
     [ -d "$PCAT_PATH" ] || continue
     PCAT_NAME=$(basename "$PCAT_PATH")
-    SESSION_NAME="${RIG}-polecat-${PCAT_NAME}"
+    SESSION_NAME="${RIG_PREFIX}-polecat-${PCAT_NAME}"
 
     # Check if session exists
     if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
