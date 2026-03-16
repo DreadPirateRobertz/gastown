@@ -221,7 +221,6 @@ func (b *Beads) CreateAgentBead(id, title string, fields *AgentFields) (*Issue, 
 			"--description=" + description,
 			"--type=agent",
 			"--labels=gt:agent",
-			"--ephemeral",
 		}
 		if NeedsForceForID(id) {
 			a = append(a, "--force")
@@ -234,8 +233,9 @@ func (b *Beads) CreateAgentBead(id, title string, fields *AgentFields) (*Issue, 
 		return a
 	}
 
-	// Create ephemeral agent bead (wisps table). Agent operational state has
-	// zero git history consumers (gt-bewatn.9).
+	// Create persistent agent bead (issues table). Agent beads were previously
+	// ephemeral (wisps) but wisp GC deleted them (GH#2768). When bd gains
+	// --no-history support, switch to that to avoid Dolt commit noise.
 	out, err := b.run(buildArgs()...)
 	if err != nil {
 		out, err = b.run(buildArgs()...)
@@ -344,12 +344,8 @@ func (b *Beads) CreateOrReopenAgentBead(id, title string, fields *AgentFields) (
 	if _, err := target.run("update", id, "--type=agent"); err != nil {
 		return nil, fmt.Errorf("fixing agent bead type: %w", err)
 	}
-	// Ensure agent bead is ephemeral (wisp) — agent operational state has
-	// zero git history consumers (gt-bewatn.9)
-	if _, err := target.run("update", id, "--ephemeral"); err != nil {
-		// Non-fatal: the bead is functional without ephemeral flag
-		_ = err
-	}
+	// Agent beads are now persistent (GH#2768) — wisp GC was deleting them.
+	// Will switch to --no-history when bd supports it.
 
 	// Note: role slot no longer set - role definitions are config-based
 
