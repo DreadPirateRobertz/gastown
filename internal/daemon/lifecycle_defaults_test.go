@@ -140,6 +140,7 @@ func TestEnsureLifecycleDefaults_FullyConfigured(t *testing.T) {
 			WispReaper:   &WispReaperConfig{Enabled: false},
 			CompactorDog: &CompactorDogConfig{Enabled: false},
 			DoctorDog:    &DoctorDogConfig{Enabled: false},
+			Handler:      &PatrolConfig{Enabled: false},
 			JsonlGitBackup:       &JsonlGitBackupConfig{Enabled: false},
 			DoltBackup:           &DoltBackupConfig{Enabled: false},
 			ScheduledMaintenance: &ScheduledMaintenanceConfig{Enabled: false, Threshold: &threshold},

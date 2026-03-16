@@ -363,7 +363,50 @@ func TestEnsureCustomTypes_VerifyPersistence(t *testing.T) {
 		// on "config get types.custom" — simulating a silent write failure.
 		binDir := t.TempDir()
 		logPath := filepath.Join(binDir, "bd.log")
-		script := `#!/bin/sh
+
+		if runtime.GOOS == "windows" {
+			psPath := filepath.Join(binDir, "bd.ps1")
+			psScript := `# Mock bd — verify-persistence variant (returns empty for types.custom).
+$logFile = '` + strings.ReplaceAll(logPath, "'", "''") + `'
+Add-Content -Path $logFile -Value ($args -join ' ')
+
+$cmd = ''
+foreach ($arg in $args) {
+  if ($arg -like '--*') { continue }
+  $cmd = $arg
+  break
+}
+
+switch ($cmd) {
+  'init' {
+    $target = $env:BEADS_DIR
+    if ([string]::IsNullOrEmpty($target)) {
+      $target = Join-Path (Get-Location) '.beads'
+    }
+    New-Item -ItemType Directory -Force -Path (Join-Path $target 'dolt') | Out-Null
+    Set-Content -Path (Join-Path $target 'config.yaml') -Value @("prefix: gt", "issue-prefix: gt-")
+    exit 0
+  }
+  'config' {
+    # "config set" succeeds but "config get types.custom" returns empty
+    if ($args -join ' ' -match 'get types\.custom') {
+      Write-Output ''
+    }
+    exit 0
+  }
+  'migrate' { exit 0 }
+  default { exit 0 }
+}
+`
+			cmdScript := "@echo off\r\npwsh -NoProfile -NoLogo -File \"" + psPath + "\" %*\r\n"
+			if err := os.WriteFile(psPath, []byte(psScript), 0644); err != nil {
+				t.Fatalf("write mock bd ps1: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(binDir, "bd.cmd"), []byte(cmdScript), 0644); err != nil {
+				t.Fatalf("write mock bd cmd: %v", err)
+			}
+		} else {
+			script := `#!/bin/sh
 LOG_FILE='` + logPath + `'
 printf '%s\n' "$*" >> "$LOG_FILE"
 cmd=""
@@ -388,8 +431,9 @@ case "$cmd" in
   *) exit 0 ;;
 esac
 `
-		if err := os.WriteFile(filepath.Join(binDir, "bd"), []byte(script), 0755); err != nil {
-			t.Fatalf("write mock bd: %v", err)
+			if err := os.WriteFile(filepath.Join(binDir, "bd"), []byte(script), 0755); err != nil {
+				t.Fatalf("write mock bd: %v", err)
+			}
 		}
 		t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
