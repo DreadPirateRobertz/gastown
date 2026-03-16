@@ -967,14 +967,14 @@ func (r *Router) validateRecipient(identity string) error {
 					}
 				}
 			}
-			if len(queryErrors) > 0 {
-				return fmt.Errorf("no agent found (query errors: %s)", strings.Join(queryErrors, "; "))
-			}
 		}
 	}
 
 	// Fall back to workspace directory validation. Agent beads may be missing
 	// (e.g., Dolt DB reset) even though the agent's workspace directory exists.
+	// This also handles the case where some rig databases are inaccessible
+	// (e.g., cfutons_mobile's beads_cm) — a rig database failure should not
+	// block dispatch to agents in other rigs (GH#2748, gt-za5q3).
 	if r.townRoot != "" && r.validateAgentWorkspace(identity) {
 		return nil
 	}
