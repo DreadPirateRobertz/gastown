@@ -87,7 +87,7 @@ resolve that placeholder with this rule:
 You MUST process steps in strict DAG order. Walk through each step sequentially,
 unless you are explicitly told to skip to a step."""
 formula = "mol-refinery-patrol"
-version = 12
+version = 13
 
 [vars]
 [vars.wisp_type]
@@ -341,7 +341,14 @@ id = "run-tests"
 title = "Run quality checks and tests"
 needs = ["process-branch"]
 description = """
+**FIRST: Check run_tests before doing anything else.**
+
 **Config: run_tests = {{run_tests}}**
+
+If run_tests = "false": **SKIP THE ENTIRE TEST SUITE (step 3 below).** You MUST
+still run quality checks (step 1) if they are configured. But do NOT run the
+test command under any circumstances when run_tests = "false".
+
 **Config: test_command = {{test_command}}**
 **Config: setup_command = {{setup_command}}**
 **Config: typecheck_command = {{typecheck_command}}**
@@ -369,9 +376,10 @@ Empty commands mean "not configured for this project" — skip silently.
 Proceed to handle-failures step. Track which specific check failed
 (setup/typecheck/lint/build) for the failure diagnosis.
 
-**3. Run the test suite:**
+**3. Run the test suite (ONLY if run_tests = "true"):**
 
-If run_tests = "false": Skip this step entirely. Proceed to handle-failures.
+If run_tests = "false": Do NOT run tests. Skip to handle-failures. This is
+non-negotiable — the rig owner explicitly disabled tests.
 
 If run_tests = "true":
 
