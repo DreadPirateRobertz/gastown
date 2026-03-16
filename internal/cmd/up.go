@@ -476,7 +476,18 @@ func disableCurrentAgentDND(townRoot string) (bool, error) {
 }
 
 // ensureDaemon starts the daemon if not running.
+// Refuses to start during an active shutdown to prevent the race condition
+// where a dying session restarts the daemon after gt down kills it (#2656).
 func ensureDaemon(townRoot string) error {
+	// Check shutdown lock before starting a new daemon.
+	// During gt down, sessions are killed after the daemon. A dying session
+	// (e.g., mayor) can trigger ensureDaemon, spawning a new daemon that
+	// outlives the shutdown. The shutdown.lock is held by gt down for the
+	// entire teardown sequence.
+	if daemon.IsShutdownInProgress(townRoot) {
+		return nil
+	}
+
 	running, _, err := daemon.IsRunning(townRoot)
 	if err != nil {
 		return err

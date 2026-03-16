@@ -266,6 +266,14 @@ func New(config *Config) (*Daemon, error) {
 func (d *Daemon) Run() error {
 	d.logger.Printf("Daemon starting (PID %d)", os.Getpid())
 
+	// Refuse to start if a shutdown is in progress (#2656).
+	// A dying session can spawn a new daemon process after gt down kills the
+	// old one. The shutdown.lock is held for the entire teardown sequence.
+	if IsShutdownInProgress(d.config.TownRoot) {
+		d.logger.Println("Shutdown in progress, refusing to start")
+		return fmt.Errorf("shutdown in progress")
+	}
+
 	// Acquire exclusive lock to prevent multiple daemons from running.
 	// This prevents the TOCTOU race condition where multiple concurrent starts
 	// can all pass the IsRunning() check before any writes the PID file.
