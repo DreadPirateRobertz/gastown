@@ -147,6 +147,9 @@ func upgradeDoctor(townRoot string) upgradeResult {
 	d.Register(doctor.NewPrimingCheck())
 	d.Register(doctor.NewLifecycleHygieneCheck())
 	d.Register(doctor.NewWorktreeGitdirCheck())
+	d.Register(doctor.NewAgentBeadsCheck())
+	d.Register(doctor.NewRigBeadsCheck())
+	d.Register(doctor.NewRoleBeadsCheck())
 
 	var report *doctor.Report
 	if upgradeDryRun {
