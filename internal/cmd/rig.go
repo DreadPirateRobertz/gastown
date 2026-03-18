@@ -339,6 +339,25 @@ var (
 	promptYesNoUnsafeProceed = promptYesNo
 )
 
+var rigRepairCmd = &cobra.Command{
+	Use:   "repair <rig>",
+	Short: "Re-initialize beads for a rig with a partial or broken beads setup",
+	Long: `Re-run beads initialization for a rig that was left in a broken state.
+
+Common cause: 'gt rig add' succeeded but Dolt went down mid-init, leaving
+metadata.json pointing at the wrong database or missing issue_prefix config.
+
+repair:
+  1. Ensures the rig's Dolt database exists (idempotent)
+  2. Fixes metadata.json to use the correct database name and server mode
+  3. Re-runs 'bd init' if .beads/ is missing entirely
+  4. Re-sets issue_prefix config on the server-side database
+
+Safe to run on a healthy rig — all steps are idempotent.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runRigRepair,
+}
+
 func init() {
 	rootCmd.AddCommand(rigCmd)
 	rigCmd.AddCommand(rigAddCmd)
@@ -346,6 +365,7 @@ func init() {
 	rigCmd.AddCommand(rigListCmd)
 	rigCmd.AddCommand(rigRebootCmd)
 	rigCmd.AddCommand(rigRemoveCmd)
+	rigCmd.AddCommand(rigRepairCmd)
 	rigCmd.AddCommand(rigResetCmd)
 	rigCmd.AddCommand(rigRestartCmd)
 	rigCmd.AddCommand(rigShutdownCmd)
@@ -845,6 +865,95 @@ func runRigList(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
+	return nil
+}
+
+func runRigRepair(cmd *cobra.Command, args []string) error {
+	name := args[0]
+
+	townRoot, err := workspace.FindFromCwdOrError()
+	if err != nil {
+		return fmt.Errorf("not in a Gas Town workspace: %w", err)
+	}
+
+	rigPath := filepath.Join(townRoot, name)
+	if _, err := os.Stat(rigPath); os.IsNotExist(err) {
+		return fmt.Errorf("rig %q not found at %s", name, rigPath)
+	}
+
+	// Load rig config to get the beads prefix.
+	rigCfg, err := rig.LoadRigConfig(rigPath)
+	if err != nil {
+		return fmt.Errorf("loading rig config for %q: %w (is this a valid rig directory?)", name, err)
+	}
+	prefix := rigCfg.Beads.Prefix
+	if prefix == "" {
+		return fmt.Errorf("rig %q has no beads prefix configured (check config.json)", name)
+	}
+
+	// Require Dolt to be running — repair needs it to fix metadata and
+	// re-create the database if missing.
+	if running, _, err := doltserver.IsRunning(townRoot); err != nil {
+		return fmt.Errorf("checking Dolt server: %w", err)
+	} else if !running {
+		return fmt.Errorf("Dolt server is not running; start it with 'gt up' or 'gt dolt start' then retry")
+	}
+
+	fmt.Printf("Repairing beads for rig %q (prefix: %s)...\n", name, prefix)
+
+	// Step 1: Ensure the Dolt database exists (idempotent — no-op if already present).
+	_, created, err := doltserver.InitRig(townRoot, name)
+	if err != nil {
+		return fmt.Errorf("ensuring Dolt database for %q: %w", name, err)
+	}
+	if created {
+		fmt.Printf("  ✓ Created missing Dolt database %q\n", name)
+	} else {
+		fmt.Printf("  ✓ Dolt database %q exists\n", name)
+	}
+
+	// Step 2: Re-initialize beads if .beads/ is missing or has no metadata.json.
+	beadsDir := filepath.Join(rigPath, ".beads")
+	metadataPath := filepath.Join(beadsDir, "metadata.json")
+	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
+		fmt.Printf("  Beads not initialized (.beads/metadata.json missing) — running bd init...\n")
+		g := git.NewGit(townRoot)
+		rigsPath := filepath.Join(townRoot, "mayor", "rigs.json")
+		rigsConfig, loadErr := config.LoadRigsConfig(rigsPath)
+		if loadErr != nil {
+			rigsConfig = &config.RigsConfig{Rigs: make(map[string]config.RigEntry)}
+		}
+		mgr := rig.NewManager(townRoot, rigsConfig, g)
+		if initErr := mgr.InitBeads(rigPath, prefix, name); initErr != nil {
+			return fmt.Errorf("bd init failed: %w\nRun 'gt doctor --fix --rig %s' to retry", initErr, name)
+		}
+		fmt.Printf("  ✓ Beads initialized\n")
+	} else {
+		fmt.Printf("  ✓ .beads/metadata.json exists\n")
+	}
+
+	// Step 3: Fix metadata.json to use correct dolt_database and server mode.
+	// This repairs the common partial-init failure where EnsureMetadata was
+	// non-fatal and left metadata pointing at beads_<prefix> instead of <rigName>.
+	if err := doltserver.EnsureMetadata(townRoot, name); err != nil {
+		fmt.Printf("  %s Could not update metadata.json: %v\n", style.Warning.Render("!"), err)
+		fmt.Printf("    Run 'gt doctor --fix --rig %s' to retry after Dolt is healthy.\n", name)
+	} else {
+		fmt.Printf("  ✓ metadata.json points at database %q\n", name)
+	}
+
+	// Step 4: Re-set issue_prefix on the server-side database.
+	resolvedBeadsDir := beads.ResolveBeadsDir(rigPath)
+	prefixCmd := exec.Command("bd", "config", "set", "issue_prefix", prefix)
+	prefixCmd.Dir = rigPath
+	prefixCmd.Env = append(os.Environ(), "BEADS_DIR="+resolvedBeadsDir)
+	if out, err := prefixCmd.CombinedOutput(); err != nil {
+		fmt.Printf("  %s Could not set issue_prefix: %v (%s)\n", style.Warning.Render("!"), err, strings.TrimSpace(string(out)))
+	} else {
+		fmt.Printf("  ✓ issue_prefix set to %q\n", prefix)
+	}
+
+	fmt.Printf("\nRig %q repair complete. Run 'gt doctor --rig %s' to verify.\n", name, name)
 	return nil
 }
 
