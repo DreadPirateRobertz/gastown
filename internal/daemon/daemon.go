@@ -53,8 +53,9 @@ type Daemon struct {
 	curator       *feed.Curator
 	convoyManager *ConvoyManager
 	beadsStores   map[string]beadsdk.Storage
-	doltServer *DoltServerManager
-	krcPruner  *KRCPruner
+	doltServer    *DoltServerManager
+	krcPruner     *KRCPruner
+	webhookServer *WebhookServer
 
 	// Mass death detection: track recent session deaths
 	deathsMu     sync.Mutex
@@ -223,6 +224,19 @@ func New(config *Config) (*Daemon, error) {
 		logger.Printf("Warning: bd not found in PATH, subprocess calls may fail")
 	}
 
+	// Initialize webhook server if configured (started in Run()).
+	var webhookServer *WebhookServer
+	if patrolConfig != nil && patrolConfig.Patrols != nil && patrolConfig.Patrols.Webhook != nil {
+		webhookServer = NewWebhookServer(patrolConfig.Patrols.Webhook, config.TownRoot, logger.Printf)
+		if webhookServer != nil {
+			port := patrolConfig.Patrols.Webhook.Port
+			if port == 0 {
+				port = webhookDefaultPort
+			}
+			logger.Printf("Webhook listener configured (port %d)", port)
+		}
+	}
+
 	// Initialize restart tracker with exponential backoff.
 	// Parameters are configurable via patrols.restart_tracker in daemon.json.
 	var rtCfg RestartTrackerConfig
@@ -268,6 +282,7 @@ func New(config *Config) (*Daemon, error) {
 		ctx:            ctx,
 		cancel:         cancel,
 		doltServer:     doltServer,
+		webhookServer:  webhookServer,
 		gtPath:         gtPath,
 		bdPath:         bdPath,
 		restartTracker: restartTracker,
@@ -386,6 +401,11 @@ func (d *Daemon) Run() error {
 		} else {
 			d.logger.Println("KRC pruner started")
 		}
+	}
+
+	// Start webhook HTTP listener if configured.
+	if d.webhookServer != nil {
+		d.webhookServer.Start()
 	}
 
 	// Start dedicated Dolt health check ticker if Dolt server is configured.
@@ -1609,6 +1629,11 @@ func (d *Daemon) shutdown(state *State) error { //nolint:unparam // error return
 
 	// Push Dolt remotes before stopping the server (if patrol is enabled)
 	d.pushDoltRemotes()
+
+	// Stop webhook listener if running.
+	if d.webhookServer != nil {
+		d.webhookServer.Stop()
+	}
 
 	// Stop Dolt server if we're managing it
 	if d.doltServer != nil && d.doltServer.IsEnabled() && !d.doltServer.IsExternal() {

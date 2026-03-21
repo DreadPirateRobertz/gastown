@@ -130,6 +130,36 @@ type PatrolsConfig struct {
 	ScheduledMaintenance   *ScheduledMaintenanceConfig    `json:"scheduled_maintenance,omitempty"`
 	MainBranchTest         *MainBranchTestConfig          `json:"main_branch_test,omitempty"`
 	RestartTracker         *RestartTrackerConfig          `json:"restart_tracker,omitempty"`
+	Webhook                *WebhookConfig                 `json:"webhook,omitempty"`
+}
+
+// WebhookConfig holds configuration for the optional HTTP webhook listener.
+// When enabled, the daemon listens for POST events from Forgejo/Gitea or
+// GitHub and routes them to the appropriate active agent session via nudge.
+//
+// Example mayor/daemon.json entry:
+//
+//	"webhook": {
+//	  "enabled": true,
+//	  "port": 8742,
+//	  "secret": "webhook-secret",
+//	  "bind_addr": "127.0.0.1"
+//	}
+type WebhookConfig struct {
+	// Enabled controls whether the webhook HTTP listener starts.
+	Enabled bool `json:"enabled"`
+
+	// Port is the TCP port to listen on (default: 8742).
+	Port int `json:"port,omitempty"`
+
+	// Secret is the HMAC-SHA256 signing secret configured in Forgejo/GitHub.
+	// Forgejo uses X-Gitea-Signature; GitHub uses X-Hub-Signature-256.
+	// If empty, signature verification is skipped (not recommended in production).
+	Secret string `json:"secret,omitempty"`
+
+	// BindAddr is the address to listen on (default: "127.0.0.1").
+	// Set to "0.0.0.0" only for external access (e.g. Tailscale-routed networks).
+	BindAddr string `json:"bind_addr,omitempty"`
 }
 
 // DoltRemotesConfig holds configuration for the dolt_remotes patrol.
