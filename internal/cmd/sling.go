@@ -231,6 +231,17 @@ func runSling(cmd *cobra.Command, args []string) (retErr error) {
 		}
 	}
 
+	// Validate --model flag: only allow alphanumeric, hyphens, and dots.
+	// Model strings get appended to the polecat startup command — reject anything
+	// that could be a shell injection vector (spaces, semicolons, slashes, etc.).
+	if slingModel != "" {
+		for _, c := range slingModel {
+			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.') {
+				return fmt.Errorf("invalid --model value %q: only letters, digits, hyphens, and dots are allowed", slingModel)
+			}
+		}
+	}
+
 	// Disable Dolt auto-commit for all bd commands run during sling (gt-u6n6a).
 	// Under concurrent load (batch slinging), auto-commits from individual bd writes
 	// cause manifest contention and 'database is read only' errors. The Dolt server
