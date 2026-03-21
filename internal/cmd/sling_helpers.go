@@ -720,7 +720,12 @@ func InstantiateFormulaOnBead(ctx context.Context, formulaName, beadID, title, h
 
 	// Build variable list once so both legacy and fallback paths use
 	// identical formula inputs.
-	featureVar := fmt.Sprintf("feature=%s", sanitizeFormulaVar(title))
+	// Security: use bead ID as the {{feature}} variable, not the user-controlled
+	// title. This eliminates the gt-sec-001 semantic injection surface — bead IDs
+	// are system-generated and cannot carry adversarial natural-language payloads.
+	// Polecats call `bd show {{issue}}` at runtime to read the full title/description
+	// with their own judgment rather than having it injected into step context.
+	featureVar := fmt.Sprintf("feature=%s", beadID)
 	issueVar := fmt.Sprintf("issue=%s", beadID)
 	formulaVars := []string{featureVar, issueVar}
 	formulaVars = append(formulaVars, extraVars...)

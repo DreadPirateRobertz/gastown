@@ -425,8 +425,9 @@ exit /b 0
 		t.Fatalf("mol wisp command not found:\n%s", logContent)
 	}
 
-	if !strings.Contains(wispLine, "feature=My Cool Feature") {
-		t.Errorf("mol wisp missing feature variable:\n%s", wispLine)
+	// gt-sec-001 structural fix: feature var uses bead ID, not user title
+	if !strings.Contains(wispLine, "feature=gt-abc123") {
+		t.Errorf("mol wisp feature variable should be bead ID (gt-sec-001 fix), not title:\n%s", wispLine)
 	}
 
 	if !strings.Contains(wispLine, "issue=gt-abc123") {
@@ -557,8 +558,9 @@ exit /b 0
 	if fallbackBondLine == "" {
 		t.Fatalf("missing direct bond fallback in log:\n%s", logContent)
 	}
-	if !containsVarArg(fallbackBondLine, "feature", "My Cool Feature") {
-		t.Fatalf("fallback bond missing feature variable:\n%s", logContent)
+	// gt-sec-001 structural fix: feature var uses bead ID, not user title
+	if !containsVarArg(fallbackBondLine, "feature", "gt-abc123") {
+		t.Fatalf("fallback bond feature variable should be bead ID (gt-sec-001 fix):\n%s", logContent)
 	}
 	if !containsVarArg(fallbackBondLine, "issue", "gt-abc123") {
 		t.Fatalf("fallback bond missing issue variable:\n%s", logContent)
