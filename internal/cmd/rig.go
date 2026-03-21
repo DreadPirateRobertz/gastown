@@ -305,6 +305,7 @@ var (
 	rigAddAdoptForce     bool
 	rigAddFilter         string
 	rigAddSparseCheckout []string
+	rigAddTemplate       string
 	rigResetHandoff    bool
 	rigResetMail       bool
 	rigResetStale      bool
@@ -367,6 +368,7 @@ func init() {
 	rigAddCmd.Flags().BoolVar(&rigAddAdoptForce, "force", false, "With --adopt, register even if git remote cannot be detected")
 	rigAddCmd.Flags().StringVar(&rigAddFilter, "filter", "", "Partial clone filter (e.g. \"blob:none\", \"tree:0\") to reduce clone size")
 	rigAddCmd.Flags().StringSliceVar(&rigAddSparseCheckout, "sparse-checkout", nil, "Sparse checkout paths (cone mode); comma-separated or repeated")
+	rigAddCmd.Flags().StringVar(&rigAddTemplate, "template", "", "Apply a rig template after creation (see 'gt rig template list')")
 
 	rigResetCmd.Flags().BoolVar(&rigResetHandoff, "handoff", false, "Clear handoff content")
 	rigResetCmd.Flags().BoolVar(&rigResetMail, "mail", false, "Clear stale mail messages")
@@ -674,6 +676,15 @@ func runRigAdd(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  ├── crew/             (empty - add crew with 'gt crew add')\n")
 	fmt.Printf("  ├── witness/\n")
 	fmt.Printf("  └── polecats/         (.claude/ scaffolded for polecat sessions)\n")
+
+	// Apply template if requested
+	if rigAddTemplate != "" {
+		rigPath := filepath.Join(townRoot, name)
+		fmt.Printf("\nApplying template %s...\n", style.Bold.Render(rigAddTemplate))
+		if err := ApplyTemplateToRig(rigAddTemplate, rigPath, name); err != nil {
+			fmt.Printf("  %s Template apply failed: %v\n", style.Warning.Render("!"), err)
+		}
+	}
 
 	fmt.Printf("\nNext steps:\n")
 	fmt.Printf("  gt crew add <name> --rig %s   # Create your personal workspace\n", name)
