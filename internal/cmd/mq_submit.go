@@ -257,9 +257,13 @@ func runMqSubmit(cmd *cobra.Command, args []string) error {
 			style.PrintWarning("MR %s has stale HEAD (%s → %s) — superseding with fresh submission (GH#3032)",
 				existingMR.ID, short(existingFields.HeadSHA), short(headSHA))
 			if closeErr := bd.CloseWithReason(fmt.Sprintf("superseded: new commits on %s", branch), existingMR.ID); closeErr != nil {
-				style.PrintWarning("could not supersede stale MR %s: %v", existingMR.ID, closeErr)
+				// Close failed — keep existing MR to avoid two open MRs for the same branch.
+				style.PrintWarning("could not supersede stale MR %s (reusing it): %v", existingMR.ID, closeErr)
+				mrIssue = existingMR
+				fmt.Printf("%s Reusing existing MR (supersede failed)\n", style.Bold.Render("✓"))
+			} else {
+				existingMR = nil // fall through to create a fresh MR below
 			}
-			existingMR = nil // fall through to create a fresh MR below
 		} else {
 			// Truly idempotent — same commits, reuse existing MR
 			mrIssue = existingMR

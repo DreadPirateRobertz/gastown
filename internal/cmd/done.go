@@ -861,9 +861,14 @@ func runDone(cmd *cobra.Command, args []string) (retErr error) {
 				style.PrintWarning("MR %s has stale HEAD (%s → %s) — superseding with fresh submission (GH#3032)",
 					existingMR.ID, short(existingFields.HeadSHA), short(headSHA))
 				if closeErr := bd.CloseWithReason(fmt.Sprintf("superseded: new commits on %s", branch), existingMR.ID); closeErr != nil {
-					style.PrintWarning("could not supersede stale MR %s: %v", existingMR.ID, closeErr)
+					// Close failed — keep existing MR to avoid two open MRs for the same branch.
+					style.PrintWarning("could not supersede stale MR %s (reusing it): %v", existingMR.ID, closeErr)
+					mrID = existingMR.ID
+					fmt.Printf("%s Reusing existing MR (supersede failed)\n", style.Bold.Render("✓"))
+					fmt.Printf("  MR ID: %s\n", style.Bold.Render(mrID))
+				} else {
+					existingMR = nil // fall through to create a fresh MR below
 				}
-				existingMR = nil // fall through to create a fresh MR below
 			} else {
 				// Truly idempotent — same commits, reuse existing MR
 				mrID = existingMR.ID
