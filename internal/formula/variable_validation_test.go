@@ -230,3 +230,38 @@ func TestAllEmbeddedFormulas_VariableValidation(t *testing.T) {
 		t.Errorf("Formulas with undefined template variables:\n%s", strings.Join(failures, "\n"))
 	}
 }
+
+// TestMolPlanReview_PlanContentDataBoundary is a regression test for gt-sec-005.
+// The mol-plan-review formula must wrap {{.plan}} in <plan-content> tags so
+// user-controlled bead descriptions are treated as DATA, not LLM instructions.
+func TestMolPlanReview_PlanContentDataBoundary(t *testing.T) {
+	formulaPath := filepath.Join("formulas", "mol-plan-review.formula.toml")
+	data, err := os.ReadFile(formulaPath)
+	if err != nil {
+		t.Skipf("Formula file not found: %v", err)
+	}
+
+	content := string(data)
+
+	// The plan variable must appear inside <plan-content> tags, not bare.
+	if !strings.Contains(content, "<plan-content>") {
+		t.Error("mol-plan-review: missing <plan-content> data boundary tag (gt-sec-005)")
+	}
+	if !strings.Contains(content, "</plan-content>") {
+		t.Error("mol-plan-review: missing </plan-content> closing tag (gt-sec-005)")
+	}
+
+	// Verify {{.plan}} is not used outside the data boundary (bare injection risk).
+	// The only occurrence of {{.plan}} should be inside <plan-content>...</plan-content>.
+	planContentStart := strings.Index(content, "<plan-content>")
+	planContentEnd := strings.Index(content, "</plan-content>")
+	if planContentStart < 0 || planContentEnd < 0 {
+		t.Fatal("mol-plan-review: <plan-content> block not found")
+	}
+
+	before := content[:planContentStart]
+	after := content[planContentEnd+len("</plan-content>"):]
+	if strings.Contains(before, "{{.plan}}") || strings.Contains(after, "{{.plan}}") {
+		t.Error("mol-plan-review: {{.plan}} appears outside <plan-content> block — prompt injection risk (gt-sec-005)")
+	}
+}
