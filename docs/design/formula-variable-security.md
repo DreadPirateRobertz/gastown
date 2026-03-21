@@ -64,6 +64,25 @@ boundary. The gastown polecat then executes with gastown capabilities
 
 ---
 
+## Threat Model (STRIDE)
+
+Analysis by predator/mac, 2026-03-21.
+
+| Category | Applicable? | Detail |
+|----------|------------|--------|
+| **Spoofing** | No | No identity is forged; the injecting worker acts under their own credentials |
+| **Tampering** | **Yes — High** | Bead title is user-controlled input that, before the fix, was rendered verbatim into polecat step descriptions. A crafted title replaces legitimate work instructions with attacker-directed ones. The polecat's actions (file writes, git push, gt mail send) are redirected without any indication of compromise. |
+| **Repudiation** | **Yes — Medium** | A malicious bead title is indistinguishable from a legitimate one in audit logs. The polecat's resulting actions (commit, push, mail) are attributed to the polecat, not the bead creator. The injection leaves no forensic marker. |
+| **Information Disclosure** | **Yes — Low-Medium** | An injected instruction can direct a polecat to write sensitive context (environment variables, secrets visible at dispatch time, bead metadata) into an output file or mail message accessible to the attacker. |
+| **Denial of Service** | Low | Injected nonsense instructions could cause a polecat to loop, error, or produce incoherent output. Irritant-level impact, not service-critical. |
+| **Elevation of Privilege** | **Yes — High (primary threat)** | The critical scenario is cross-rig injection. A worker on a lower-trust rig (e.g., cfutons, PR:L) creates a bead with a malicious title. If that bead is slung to a higher-trust polecat (e.g., gastown polecat with gastown repo write access), the attacker's instructions execute under gastown-level capabilities. The security boundary crossed is the trust level between rig and polecat executor — a cfutons worker gaining effective gastown execution scope. |
+
+**Primary threat is Elevation of Privilege via cross-rig dispatch.** The attacker does not need elevated credentials — they only need the ability to create a bead (available to any authenticated worker) and for that bead to be slung across a trust boundary, which is a normal operational pattern in Gas Town convoy workflows.
+
+**Why this is not Spoofing:** The injecting worker is not pretending to be someone else. They are causing an agent at a higher trust level to act as if it received instructions from a higher-trust source — this is privilege escalation via context injection, not identity spoofing.
+
+---
+
 ## Why Sanitization Is Insufficient
 
 An initial fix (`sanitizeFormulaVar`) stripped newlines, carriage returns, and
