@@ -45,6 +45,13 @@ type AgentAdapter interface {
 	Watch(ctx context.Context, sessionID, workDir string, since time.Time) (<-chan AgentEvent, error)
 }
 
+// ProjectDirForWorkDir returns the Claude Code project directory for workDir.
+// This is the directory where Claude Code stores session JSONL files for agents
+// running in the given working directory.
+func ProjectDirForWorkDir(workDir string) (string, error) {
+	return claudeProjectDirFor(workDir)
+}
+
 // NewAdapter returns the AgentAdapter for the given agent type name.
 // Returns nil if the agent type is unknown.
 func NewAdapter(agentType string) AgentAdapter {
