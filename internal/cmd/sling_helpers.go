@@ -720,7 +720,7 @@ func InstantiateFormulaOnBead(ctx context.Context, formulaName, beadID, title, h
 
 	// Build variable list once so both legacy and fallback paths use
 	// identical formula inputs.
-	featureVar := fmt.Sprintf("feature=%s", title)
+	featureVar := fmt.Sprintf("feature=%s", sanitizeFormulaVar(title))
 	issueVar := fmt.Sprintf("issue=%s", beadID)
 	formulaVars := []string{featureVar, issueVar}
 	formulaVars = append(formulaVars, extraVars...)
@@ -1149,6 +1149,29 @@ func shouldAcceptPermissionWarning(agentName string) bool {
 		return false
 	}
 	return preset.EmitsPermissionWarning
+}
+
+// sanitizeFormulaVar sanitizes a bead title before use as a formula variable.
+// Bead titles are user-controlled and are rendered verbatim into formula step
+// descriptions shown to polecats (e.g. shiny {{feature}}). Without sanitization,
+// a maliciously crafted title can inject instructions into the polecat's work
+// context — the D39/prompt-injection analogue for Gas Town dispatch (gt-sec-001).
+//
+// Strips newlines (which create new logical lines in bd step descriptions),
+// curly braces (which break formula template syntax), and truncates to a safe
+// length. Printable ASCII outside these characters is preserved.
+func sanitizeFormulaVar(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '{' || r == '}' {
+			return -1
+		}
+		return r
+	}, s)
+	const maxFormulaVarLen = 120
+	if len(s) > maxFormulaVarLen {
+		s = s[:maxFormulaVarLen]
+	}
+	return s
 }
 
 // isMalformedWispID detects obviously malformed wisp IDs from bd mol wisp output.
