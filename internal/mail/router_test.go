@@ -23,6 +23,11 @@ import (
 )
 
 func TestDetectTownRoot(t *testing.T) {
+	// Unset GT_TOWN_ROOT/GT_ROOT so tests exercise workspace.Find fallback.
+	// (The real session always has these set; this tests the detection logic itself.)
+	t.Setenv("GT_TOWN_ROOT", "")
+	t.Setenv("GT_ROOT", "")
+
 	// Create temp directory structure
 	tmpDir := t.TempDir()
 	townRoot := filepath.Join(tmpDir, "town")
@@ -74,6 +79,44 @@ func TestDetectTownRoot(t *testing.T) {
 				t.Errorf("detectTownRoot(%q) = %q, want %q", tt.startDir, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestDetectTownRoot_PrefersEnvVar verifies that GT_TOWN_ROOT takes priority
+// over workspace detection, preventing rig-level mayor/town.json from being
+// mistaken for the town root.
+func TestDetectTownRoot_PrefersEnvVar(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Outer town root (the actual town)
+	outerTown := filepath.Join(tmpDir, "town")
+	if err := os.MkdirAll(filepath.Join(outerTown, "mayor"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outerTown, "mayor", "town.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Rig with its own mayor/town.json (nested workspace)
+	rigDir := filepath.Join(outerTown, "gastown")
+	if err := os.MkdirAll(filepath.Join(rigDir, "mayor"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rigDir, "mayor", "town.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Without env var, workspace.Find from the rig directory returns the rig (wrong).
+	t.Setenv("GT_TOWN_ROOT", "")
+	t.Setenv("GT_ROOT", "")
+	got := detectTownRoot(rigDir)
+	if got != rigDir {
+		t.Errorf("without env var, detectTownRoot(%q) = %q, want %q (rig)", rigDir, got, rigDir)
+	}
+
+	// With GT_TOWN_ROOT set to the outer town, detectTownRoot should return it.
+	t.Setenv("GT_TOWN_ROOT", outerTown)
+	got = detectTownRoot(rigDir)
+	if got != outerTown {
+		t.Errorf("with GT_TOWN_ROOT, detectTownRoot(%q) = %q, want %q (outer town)", rigDir, got, outerTown)
 	}
 }
 
@@ -292,6 +335,9 @@ func TestSendFromCrewWorkspace_AvoidsEphemeralPrefixMismatch(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("test uses a bash bd stub")
 	}
+	// Clear GT_TOWN_ROOT so detectTownRoot falls back to workspace detection.
+	t.Setenv("GT_TOWN_ROOT", "")
+	t.Setenv("GT_ROOT", "")
 
 	tmpDir := t.TempDir()
 	townRoot := filepath.Join(tmpDir, "town")
