@@ -202,7 +202,7 @@ func (w *WebhookServer) formatForgejoMessage(eventType string, p *forgejoPayload
 			issueNum = p.Issue.Number
 		}
 		return fmt.Sprintf("[webhook] PR #%d comment by %s: %s",
-			issueNum, p.Comment.User.Login, truncate(p.Comment.Body, 120))
+			issueNum, p.Comment.User.Login, truncate(p.Comment.Body))
 	case "pull_request_review_comment":
 		if p.Comment == nil {
 			return ""
@@ -212,7 +212,7 @@ func (w *WebhookServer) formatForgejoMessage(eventType string, p *forgejoPayload
 			prNum = p.PullRequest.Number
 		}
 		return fmt.Sprintf("[webhook] PR #%d review comment by %s: %s",
-			prNum, p.Comment.User.Login, truncate(p.Comment.Body, 120))
+			prNum, p.Comment.User.Login, truncate(p.Comment.Body))
 	}
 	return ""
 }
@@ -316,7 +316,7 @@ func (w *WebhookServer) formatGitHubMessage(eventType string, p *githubPayload) 
 			issueNum = p.Issue.Number
 		}
 		return fmt.Sprintf("[webhook] PR #%d comment by %s: %s",
-			issueNum, p.Comment.User.Login, truncate(p.Comment.Body, 120))
+			issueNum, p.Comment.User.Login, truncate(p.Comment.Body))
 	case "pull_request_review_comment":
 		if p.Comment == nil {
 			return ""
@@ -326,7 +326,7 @@ func (w *WebhookServer) formatGitHubMessage(eventType string, p *githubPayload) 
 			prNum = p.PullRequest.Number
 		}
 		return fmt.Sprintf("[webhook] PR #%d review comment by %s: %s",
-			prNum, p.Comment.User.Login, truncate(p.Comment.Body, 120))
+			prNum, p.Comment.User.Login, truncate(p.Comment.Body))
 	}
 	return ""
 }
@@ -412,8 +412,9 @@ func normalizeRepoURL(u string) string {
 	return strings.ToLower(u)
 }
 
-// truncate shortens s to at most n runes, appending "…" if truncated.
-func truncate(s string, n int) string {
+// truncate shortens s to at most 120 runes, appending "…" if truncated.
+func truncate(s string) string {
+	const n = 120
 	runes := []rune(s)
 	if len(runes) <= n {
 		return s

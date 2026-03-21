@@ -59,12 +59,13 @@ func TestNormalizeRepoURL(t *testing.T) {
 // --- truncate ---
 
 func TestTruncate(t *testing.T) {
-	if got := truncate("hello", 10); got != "hello" {
+	if got := truncate("hello"); got != "hello" {
 		t.Errorf("got %q", got)
 	}
-	got := truncate("hello world", 5)
-	if !strings.HasPrefix(got, "hello") {
-		t.Errorf("truncated %q doesn't start with 'hello'", got)
+	long := strings.Repeat("x", 130)
+	got := truncate(long)
+	if len([]rune(got)) > 121 { // 120 runes + ellipsis
+		t.Errorf("truncated string too long: %d runes", len([]rune(got)))
 	}
 	if !strings.HasSuffix(got, "…") {
 		t.Errorf("truncated %q doesn't end with ellipsis", got)
