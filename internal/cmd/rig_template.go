@@ -489,6 +489,13 @@ func runRigTemplateApply(cmd *cobra.Command, args []string) error {
 	rigName := args[1]
 	scope := strings.ToLower(strings.TrimSpace(rigTemplateScope))
 
+	// IDOR guard: if the caller is running inside a rig session, they may only
+	// apply templates to their own rig. Without this check any agent could
+	// write AGENTS.md and seed memories into a rig it doesn't own.
+	if callerRig := os.Getenv("GT_RIG"); callerRig != "" && rigName != callerRig {
+		return fmt.Errorf("rig ownership check failed: session rig is %q, cannot apply template to %q", callerRig, rigName)
+	}
+
 	tmpl, err := loadTemplate(templateName, scope)
 	if err != nil {
 		return err
