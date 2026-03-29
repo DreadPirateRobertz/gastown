@@ -13,14 +13,15 @@ type sessionChecker interface {
 	CheckSessionHealth(session string, maxInactivity time.Duration) tmux.ZombieStatus
 	HasSession(name string) (bool, error)
 	KillSession(name string) error
+	ListSessions() ([]string, error)
 }
 
 // DogHealthResult describes the health of a single dog.
 type DogHealthResult struct {
 	Name           string        `json:"name"`
 	State          State         `json:"state"`
-	SessionStatus  string        `json:"session_status"`           // from ZombieStatus.String()
-	WorkDuration   time.Duration `json:"work_duration,omitempty"`  // how long current work has been running
+	SessionStatus  string        `json:"session_status"`          // from ZombieStatus.String()
+	WorkDuration   time.Duration `json:"work_duration,omitempty"` // how long current work has been running
 	NeedsAttention bool          `json:"needs_attention"`
 	AutoCleared    bool          `json:"auto_cleared,omitempty"`
 	Recommendation string        `json:"recommendation,omitempty"`
@@ -133,10 +134,42 @@ func (hc *HealthChecker) CheckAll(maxInactivity time.Duration, autoClear bool) (
 		return nil, fmt.Errorf("listing dogs: %w", err)
 	}
 
-	results := make([]DogHealthResult, 0, len(dogs))
+	results := make([]DogHealthResult, 0, len(dogs)+1) // +1 for potential unregistered sessions
+	knownDogNames := make(map[string]bool)
+
 	for _, d := range dogs {
+		knownDogNames[d.Name] = true
 		results = append(results, hc.Check(d, maxInactivity, autoClear))
 	}
+
+	// Scan for unregistered orphan sessions (hq-dog-* that aren't in our kennel)
+	// This catches cases where sessions exist but dogs weren't registered (e.g., charlie/delta/echo)
+	sessions, err := hc.checker.ListSessions()
+	if err == nil {
+		for _, session := range sessions {
+			// Look for hq-dog-* pattern
+			if len(session) > 7 && session[:7] == "hq-dog-" {
+				dogName := session[7:] // Extract name after "hq-dog-"
+				if !knownDogNames[dogName] {
+					// This is an unregistered orphan session
+					result := DogHealthResult{
+						Name:           dogName,
+						State:          StateUnknown,
+						SessionStatus:  "unregistered-orphan",
+						NeedsAttention: true,
+						Recommendation: "unregistered orphan session in tmux (not in kennel)",
+					}
+					if autoClear {
+						_ = hc.checker.KillSession(session)
+						result.AutoCleared = true
+						result.Recommendation = "unregistered orphan auto-cleared (session killed)"
+					}
+					results = append(results, result)
+				}
+			}
+		}
+	}
+
 	return results, nil
 }
 

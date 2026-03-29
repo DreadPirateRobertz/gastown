@@ -11,6 +11,7 @@ import (
 type mockSessionChecker struct {
 	healthResults  map[string]tmux.ZombieStatus // session -> status
 	sessionsAlive  map[string]bool              // session -> exists
+	allSessions    []string                     // all sessions for ListSessions()
 	killedSessions []string
 }
 
@@ -18,6 +19,7 @@ func newMockChecker() *mockSessionChecker {
 	return &mockSessionChecker{
 		healthResults: make(map[string]tmux.ZombieStatus),
 		sessionsAlive: make(map[string]bool),
+		allSessions:   []string{},
 	}
 }
 
@@ -35,6 +37,10 @@ func (m *mockSessionChecker) HasSession(name string) (bool, error) {
 func (m *mockSessionChecker) KillSession(name string) error {
 	m.killedSessions = append(m.killedSessions, name)
 	return nil
+}
+
+func (m *mockSessionChecker) ListSessions() ([]string, error) {
+	return m.allSessions, nil
 }
 
 // =============================================================================

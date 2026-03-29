@@ -667,9 +667,34 @@ Parse the JSON output (HealthReport schema):
 
 **Step 3: React to alerts**
 
-**Server down (CRITICAL):**
+**Server down (CRITICAL) — Attempt auto-restart:**
 ```bash
-gt escalate -s CRITICAL "Dolt server is down"
+# Step 3a: Try to restart Dolt
+dolt_home="${HOME}/.dolt-data"
+if ! gt dolt start 2>/tmp/dolt-restart.log; then
+  # Restart failed — escalate with diagnostic info
+  error_msg=$(cat /tmp/dolt-restart.log 2>/dev/null | head -5)
+  gt escalate -s CRITICAL "Dolt server is down. Auto-restart failed: ${error_msg}"
+  exit 1
+fi
+
+# Step 3b: Wait 2 seconds for server to stabilize
+sleep 2
+
+# Step 3c: Re-run health check to confirm recovery
+if ! gt health --json >/tmp/dolt-health-after-restart.json 2>&1; then
+  gt escalate -s CRITICAL "Dolt restart succeeded but health check still failing"
+  exit 1
+fi
+
+# Step 3d: Parse health report — if server.running is now true, log recovery
+server_running=$(jq -r '.server.running' /tmp/dolt-health-after-restart.json 2>/dev/null || echo "false")
+if [ "$server_running" = "true" ]; then
+  echo "✓ Dolt server recovered after restart (auto-restart successful)"
+else
+  gt escalate -s CRITICAL "Dolt server still down after auto-restart attempt"
+  exit 1
+fi
 ```
 
 **Commit bloat (commits > 50k in any DB):**
