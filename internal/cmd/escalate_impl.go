@@ -767,7 +767,8 @@ func sendEscalationSlack(cfg *config.EscalationConfig, beadID, severity, descrip
 		return fmt.Errorf("marshaling slack payload: %w", err)
 	}
 
-	resp, err := http.Post(cfg.Contacts.SlackWebhook, "application/json", strings.NewReader(string(body)))
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(cfg.Contacts.SlackWebhook, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		return fmt.Errorf("posting to slack: %w", err)
 	}
@@ -791,7 +792,8 @@ func sendEscalationSMS(cfg *config.EscalationConfig, beadID, severity, descripti
 		return fmt.Errorf("marshaling sms payload: %w", err)
 	}
 
-	resp, err := http.Post(cfg.Contacts.SMSWebhook, "application/json", strings.NewReader(string(body)))
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(cfg.Contacts.SMSWebhook, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		return fmt.Errorf("posting to sms webhook: %w", err)
 	}

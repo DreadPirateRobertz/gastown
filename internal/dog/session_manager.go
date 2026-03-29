@@ -182,10 +182,23 @@ func (m *SessionManager) Stop(dogName string, force bool) error {
 	return nil
 }
 
-// IsRunning checks if a dog session is active.
+// IsRunning checks if a dog session is active AND the agent is still alive.
+// Returns false if the session exists but the agent process has crashed/stuck.
+// This prevents EnsureRunning from skipping restart of zombie sessions.
+// (hq-zp5bu: dog respawn loops were accumulating orphaned processes because
+// stuck-but-existing sessions were never restarted)
 func (m *SessionManager) IsRunning(dogName string) (bool, error) {
 	sessionID := m.SessionName(dogName)
-	return m.tmux.HasSession(sessionID)
+	// First check if session exists at all
+	hasSession, err := m.tmux.HasSession(sessionID)
+	if err != nil || !hasSession {
+		return hasSession, err
+	}
+
+	// Session exists, but check if the agent inside is actually alive.
+	// If session exists but agent is dead, return false so it can be restarted.
+	isAlive := m.tmux.IsAgentAlive(sessionID)
+	return isAlive, nil
 }
 
 // Status returns detailed status for a dog session.
