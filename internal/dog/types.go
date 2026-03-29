@@ -15,6 +15,8 @@ const (
 	StateIdle State = "idle"
 	// StateWorking means the dog is executing a task.
 	StateWorking State = "working"
+	// StateUnknown means the dog's state cannot be determined (e.g., unregistered orphan session).
+	StateUnknown State = "unknown"
 )
 
 // Dog represents a Deacon helper worker.
